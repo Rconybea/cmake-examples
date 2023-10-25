@@ -81,14 +81,16 @@ To build + run:
 $ cd cmake-examples
 $ git checkout ex1
 $ mkdir build
-$ cmake -B build
+$ cmake -B build       # ..configure
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build  # ..compile
 [ 50%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
 [100%] Linking CXX executable hello
 [100%] Built target hello
-$ ./build/hello
+$ ./build/hello        # ..run
 Hello, world!
+
 $
 ```
