@@ -38,5 +38,57 @@ and to provide an opinionated (though possibly flawed) version of best practice
 9. add unit tests + performance benchmarks.
 10. add code coverage.
 
+## Preliminaries
 
+Each example gets its own dedicated git branch
 
+To get started,  clone this repo:
+```
+$ git clone git@github.com:Rconybea/cmake-examples.git
+```
+
+## Example 1
+
+```
+// hello.cpp
+
+#include <iostream>
+
+using namespace std;
+
+int
+main(int argc, char * argv[]) {
+    cout << "Hello, world!\n" << endl;
+}
+```
+
+note: here 3.25 is the version of cmake I happen to be working with
+```
+# CMakeLists.txt
+
+cmake_minimum_required(VERSION 3.25)
+project(ex1 VERSION 1.0)
+enable_language(CXX)
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+```
+
+To build + run:
+```
+$ cd cmake-examples
+$ git checkout ex1
+$ mkdir build
+$ cmake -B build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+[ 50%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ ./build/hello
+Hello, world!
+$
+```
