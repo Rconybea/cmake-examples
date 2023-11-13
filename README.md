@@ -26,6 +26,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
 
 ## Progression
 1. c++ executable X (branch ex1)
+1a. add LSP integration
 2. c++ executable X + outside library O, using find_package()
 3. c++ executable X + library A, A -> O, monorepo-style.
    X,A in same repo + build together.
@@ -100,4 +101,33 @@ $
 
 ## Example 1a
 
-LSP integration allows compiler-driven editor interaction -- syntax highlighting,  code navigation etc.
+LSP (language server process) integration allows compiler-driven editor interaction -- syntax highlighting,  code navigation etc.
+For this to work the external LSP process needs to know exactly how we invoke the compiler.
+
+1. By convention,  LSP will read a file `compile_commands.json` in the project's root (source) directory.
+2. cmake can generate `compile_commands.json` during the configure step;   this will appear in the root of the build directory.
+3. since LSP typically uses `clangd`,  we need also to tell it exactly where our preferred compiler's system headers reside;
+   clangd won't always reliably locate these for itself.
+4. expect user to performan last step: symlink from source directory to build
+   this makes sense since if multiple build directories with different compiler switches,  only one-at-a-time can be adopted
+   for LSP
+
+```
+# CMakeLists.txt
+...
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compiled_commands.json")  # 2.
+
+if(CMAKE_EXPORT_COMPILED_COMMANDS)
+  set(CMAKE_CXX_STANDARD_INLCUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})  # 3.
+endif()
+```
+
+```
+$ cd cmake-examples
+$ git checkout ex1a
+$ mkdir build
+$ ln -s build/compile_commands.json
+$ cmake -B build
+$ cmake --build build
+```
