@@ -129,5 +129,28 @@ $ git checkout ex1a
 $ mkdir build
 $ ln -s build/compile_commands.json
 $ cmake -B build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
 $ cmake --build build
+[ 50%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ ./build/hello
+Hello, world!
+
+$
+```
+
+compile_commands.json will look something like:
+
+```
+# build/compile_commands.json
+[
+{
+  "directory": "/home/roland/proj/cmake-examples/build",
+  "command": "/usr/bin/g++  -isystem /usr/lib/gcc/x86_64-linux-gnu/12.2.0/include -isystem /usr/include -isystem /usr/lib/gcc/x86_64-linux-6nu/12.2.0/include-fixed -o CMakeFiles/hello.dir/hello.cpp.o -c /home/roland/proj/cmake-examples/hello.cpp",
+  "file": "/home/roland/proj/cmake-examples/hello.cpp"
+}
+]
 ```
