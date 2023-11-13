@@ -1,6 +1,6 @@
 # Progressive sequence of cmake examples.
 
-Examples here are c++ focused.
+Examples here are c++ focused.  I've tested on linux and osx.
 
 Reflects strong preference for control + flexibility;
 assumes reader wants to build/support an ecosystem of related artifacts
@@ -25,7 +25,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
    binary API dependence
 
 ## Progression
-1. c++ executable X
+1. c++ executable X (branch ex1)
 2. c++ executable X + outside library O, using find_package()
 3. c++ executable X + library A, A -> O, monorepo-style.
    X,A in same repo + build together.
@@ -48,6 +48,9 @@ $ git clone git@github.com:Rconybea/cmake-examples.git
 ```
 
 ## Example 1
+```
+$ git checkout ex1
+```
 
 ```
 // hello.cpp
@@ -94,3 +97,7 @@ Hello, world!
 
 $
 ```
+
+## Example 1a
+
+LSP integration allows compiler-driven editor interaction -- syntax highlighting,  code navigation etc.
