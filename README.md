@@ -26,8 +26,8 @@ and to provide an opinionated (though possibly flawed) version of best practice
 
 ## Progression
 1. c++ executable X (branch ex1)
-1a. add LSP integration
-2. c++ executable X + outside library O, using find_package()
+2. add LSP integration (branch ex1a)
+3. c++ executable X + outside library O, using find_package()
 3. c++ executable X + library A, A -> O, monorepo-style.
    X,A in same repo + build together.
 4. c++ executable X + library A, A -> O, separable-style
