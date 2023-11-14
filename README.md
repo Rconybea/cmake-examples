@@ -26,7 +26,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
 
 ## Progression
 1. c++ executable X (branch ex1)
-2. add LSP integration (branch ex1a)
+2. add LSP integration (branch ex2)
 3. c++ executable X + outside library O, using find_package()
 3. c++ executable X + library A, A -> O, monorepo-style.
    X,A in same repo + build together.
@@ -99,7 +99,7 @@ Hello, world!
 $
 ```
 
-## Example 1a
+## Example 2
 
 LSP (language server process) integration allows compiler-driven editor interaction -- syntax highlighting,  code navigation etc.
 For this to work the external LSP process needs to know exactly how we invoke the compiler.
@@ -118,14 +118,14 @@ For this to work the external LSP process needs to know exactly how we invoke th
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compiled_commands.json")  # 2.
 
-if(CMAKE_EXPORT_COMPILED_COMMANDS)
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
   set(CMAKE_CXX_STANDARD_INLCUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})  # 3.
 endif()
 ```
 
 ```
 $ cd cmake-examples
-$ git checkout ex1a
+$ git checkout ex2
 $ mkdir build
 $ ln -s build/compile_commands.json
 $ cmake -B build
