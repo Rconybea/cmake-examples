@@ -26,8 +26,8 @@ and to provide an opinionated (though possibly flawed) version of best practice
 
 ## Progression
 1. c++ executable X (branch ex1)
-1a. add LSP integration
-2. c++ executable X + outside library O, using find_package()
+2. add LSP integration (branch ex2)
+3. c++ executable X + outside library O, using find_package()
 3. c++ executable X + library A, A -> O, monorepo-style.
    X,A in same repo + build together.
 4. c++ executable X + library A, A -> O, separable-style
@@ -99,7 +99,7 @@ Hello, world!
 $
 ```
 
-## Example 1a
+## Example 2
 
 LSP (language server process) integration allows compiler-driven editor interaction -- syntax highlighting,  code navigation etc.
 For this to work the external LSP process needs to know exactly how we invoke the compiler.
@@ -118,16 +118,145 @@ For this to work the external LSP process needs to know exactly how we invoke th
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compiled_commands.json")  # 2.
 
-if(CMAKE_EXPORT_COMPILED_COMMANDS)
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
   set(CMAKE_CXX_STANDARD_INLCUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})  # 3.
 endif()
 ```
 
+invoke build:
 ```
 $ cd cmake-examples
-$ git checkout ex1a
-$ mkdir build
+$ git checkout ex2
+$ mkdir -p build
 $ ln -s build/compile_commands.json
 $ cmake -B build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
 $ cmake --build build
+[ 50%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ ./build/hello
+Hello, world!
+
+$
+```
+
+compile_commands.json will look something like:
+
+```
+# build/compile_commands.json
+[
+{
+  "directory": "/home/roland/proj/cmake-examples/build",
+  "command": "/usr/bin/g++  -isystem /usr/lib/gcc/x86_64-linux-gnu/12.2.0/include -isystem /usr/include -isystem /usr/lib/gcc/x86_64-linux-6nu/12.2.0/include-fixed -o CMakeFiles/hello.dir/hello.cpp.o -c /home/roland/proj/cmake-examples/hello.cpp",
+  "file": "/home/roland/proj/cmake-examples/hello.cpp"
+}
+]
+```
+
+## Example 3
+
+Use an external software package that provides cmake support.
+For this example,  we'll use `boost::program_options`.
+
+We add two lines to `CMakeLists.txt`:
+1. `find_package()`
+2. `target_link_libraries()`
+
+```
+# CMakeLists.xt
+cmake_minimum_required(VERSION 3.25)
+project(ex1 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)                                            # new
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)                               # new
+```
+
+Notes:
+1. cmake `find_package()` searches directories in:
+   - environment variable `CMAKE_PREFIX_PATH`
+   - cmake variable `CMAKE_PREFIX_PATH`.
+2. `find_package(boost_program_options ...)` searches for a directory that contains
+   `boost_program_options-config.cmake` or `boost_program_optionsConfig.cmake`.
+3. typical linux distribution will collect cmake `find_package()` support dirs under path like `/usr/lib/x86_64-linux-gnu/cmake`
+4. the `CONFIG` argument to `find_package()` mandates that `find_package()` insist on a suitable package-specific `.cmake`
+   support file, instead of falling back to `Find<packagename>.cmake` modules under `CMAKE_MODULE_PATH`.
+   Disclaimer in `find_package()` docs:
+   "Being externally provided, Find Moduules tend to be heuristic in nature and are susceptible to becoming out-of-date"
+5. should use `target_link_libraries()` even if target library is header-only.
+   cmake knows if header-only and takes responsibility for constructing suitable link line
+6. need to read package docs or `boost_program_options-config.cmake` to find spelling for `Boost::program_options`
+
+Add some program_options-using code to `hello.cpp`
+
+```
+// hello.cpp
+
+#include <boost/program_options.hpp>
+#include <iostream>
+
+namespace po = boost::program_options;
+using namespace std;
+
+int
+main(int argc, char * argv[]) {
+    po::options_description po_descr{"Options"};
+    po_descr.add_options()
+        ("help,h",
+         "this help")
+        ("subject,s",
+         po::value<string>()->default_value("world"),
+         "say hello to this subject");
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, po_descr), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        cerr << po_descr << endl;
+    } else {
+        cout << "Hello, " << vm["subject"].as<string>() << "!\n" << endl;
+    }
+}
+```
+
+invoke build:
+```
+$ cd cmake-examples
+$ git checkout ex3
+$ mkdir -p build
+$ ln -s build/compile_commands.json
+$ cmake -B build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 50%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+```
+
+exercise executable
+```
+$ ./build/hello --help
+Options:
+  -h [ --help ]                 this help
+  -s [ --subject ] arg (=world) say hello to this subject
+
+$ ./build/hello --subject=Kermit
+Hello, Kermit!
 ```
