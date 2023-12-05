@@ -162,8 +162,8 @@ Use an external software package that provides cmake support.
 For this example,  we'll use `boost::program_options`.
 
 We add two lines to `CMakeLists.txt`:
-1. `find_package()`
-2. `target_link_libraries()`
+1. `find_package(boost_program_options ...)`
+2. `target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)`
 
 ```
 # CMakeLists.xt
@@ -259,4 +259,147 @@ Options:
 
 $ ./build/hello --subject=Kermit
 Hello, Kermit!
+```
+
+## Example 4
+
+Use an external software package that does not provide direct cmake support,  but does support pkg-config.
+For this example,  we'll use `zlib`.
+
+We add to `CMakeLists.txt`:
+1. `find_package(PkgConfig)`
+   to invoke cmake pkg-config support.
+2. `pkg_check_modules(zlib REQUIRED zlib)`
+   to search for a `zlib.pc` configuration file associated with zlib.
+   On success establishes cmake variables `zlib_CFLAGS_OTHER`, `zlib_INCLUDE_DIRS`, `zlib_LIBRARIES`
+3. `target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})`
+   to tell compiler where to find zlib include files.
+4. `target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})`
+   to tell compiler how to link zlib
+
+```
+# CMakeLists.txt
+cmake_minimum_required(VERSION 3.25)
+project(ex1 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
+target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
+```
+
+Add some zlib-using code to `hello.cpp`
+```
+// hello.cpp
+
+#include <boost/program_options.hpp>
+#include <zlib.h>
+#include <iostream>
+
+namespace po = boost::program_options;
+using namespace std;
+
+int
+main(int argc, char * argv[]) {
+    po::options_description po_descr{"Options"};
+    po_descr.add_options()
+        ("help,h",
+         "this help")
+        ("subject,s",
+         po::value<string>()->default_value("world"),
+         "say hello to this subject")
+        ("compress,z",
+         "compress hello output using zlib")
+        ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, po_descr), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        cerr << po_descr << endl;
+    } else {
+        stringstream ss;
+        ss << "Hello, " << vm["subject"].as<string>() << "!\n" << endl;
+
+        if (vm.count("compress")) {
+            /* compress output */
+
+            string s = ss.str();
+            std::vector<uint8_t> og_data_v(s.begin(), s.end());
+
+            /* required input space for zlib is (1.01 * input size) + 12;
+             * add +1 byte to avoid thinking about rounding
+             */
+            uint64_t z_data_z = (1.01 * og_data_v.size()) + 12 + 1;
+            uint8_t * z_data = reinterpret_cast<uint8_t *>(::malloc(z_data_z));
+            int32_t zresult = ::compress(z_data,
+                                         &z_data_z,
+                                         og_data_v.data(),
+                                         og_data_v.size());
+
+            switch (zresult) {
+            case Z_OK:
+                break;
+            case Z_MEM_ERROR:
+                throw std::runtime_error("zlib.compress: out of memory");
+            case Z_BUF_ERROR:
+                throw std::runtime_error("zlib.compress: output buffer too small");
+            }
+
+            cout << "original   size:" << og_data_v.size() << endl;
+            cout << "compressed size:" << z_data_z << endl;
+            cout << "compressed data:";
+            for (uint64_t i = 0; i < z_data_z; ++i) {
+                uint8_t zi = z_data[i];
+                uint8_t hi = (zi >> 4);          // hi 4 bits of zi
+                uint8_t lo = (zi & 0x0f);        // lo 4 bits of zi
+
+                char hi_ch = (hi < 10) ? '0' + hi : 'a' + hi - 10;
+                char lo_ch = (lo < 10) ? '0' + lo : 'a' + lo - 10;
+
+                cout << ' ' << hi_ch << lo_ch;   // print as hex
+            }
+            cout << endl;
+        } else {
+            cout << ss.str();
+        }
+    }
+}
+```
+
+invoke build:
+```
+$ cd cmake-examples
+$ git checkout ex4
+$ mkdir -p build
+$ ln -s build/compile_commands.json
+$ cmake -B build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+```
+
+use executable (compression working as well as can be expected on such short input)
+```
+$ ./build/hello --compress --hex --subject "all the lonely people"
+original   size:31
+compressed size:39
+compressed data: 78 9c f3 48 cd c9 c9 d7 51 48 cc c9 51 28 c9 48 55 c8 c9 cf 4b cd a9 54 28 48 cd 2f c8 49 55 e4 e2 02 00 ad 97 0a 68
 ```
