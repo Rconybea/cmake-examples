@@ -9,9 +9,18 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
 endif()
 
 find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+#message("zlib_CFLAGS_OTHER=${zlib_CFLAGS_OTHER}")
+#message("zlib_INCLUDE_DIRS=${zlib_INCLUDE_DIRS}")
+#message("zlib_LIBRARIES=${zlib_LIBRARIES}")
 
 set(SELF_EXE hello)
 set(SELF_SRCS hello.cpp)
 
 add_executable(${SELF_EXE} ${SELF_SRCS})
+target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
+target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
 target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
