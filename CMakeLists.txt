@@ -24,11 +24,9 @@ set(SELF_EXE hello)
 set(SELF_SRCS hello.cpp)
 
 add_executable(${SELF_EXE} ${SELF_SRCS})
+target_include_directories(${SELF_EXE} PUBLIC compression/include)
 target_link_libraries(${SELF_EXE} PUBLIC compression)
-#target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
-#target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
 target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
-#target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
 
 install(TARGETS ${SELF_EXE}
     RUNTIME DESTINATION bin COMPONENT Runtime
