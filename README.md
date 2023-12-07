@@ -25,11 +25,13 @@ and to provide an opinionated (though possibly flawed) version of best practice
    binary API dependence
 
 ## Progression
-1. c++ executable X (branch ex1)
-2. add LSP integration (branch ex2)
-3. c++ executable X + cmake-aware outside library O1 (boost::program_options), using find_package()
-4. c++ executable X + non-cmake outside library O2 (zlib).
-5. c++ executable X + c++ library A1, monorepo-style
+1. ex1: c++ executable X
+2. ex2: add LSP integration
+3. ex3: c++ executable X + cmake-aware outside library O1 (boost::program_options), using find_package())
+4. ex4: c++ executable X + non-cmake outside library O2 (zlib)
+5. ex5: refactor: move compression wrapper to 2nd translation unit
+6. ex6: add install target
+7. ex7: c++ executable X + c++ library A1 (compression), monorepo-style
 
 5. c++ executable X + header-only library (catch2) + unit test
 5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.
@@ -276,7 +278,7 @@ We add to `CMakeLists.txt`:
    to invoke cmake pkg-config support.
 2. `pkg_check_modules(zlib REQUIRED zlib)`
    to search for a `zlib.pc` configuration file associated with zlib.
-   On success establishes cmake variables `zlib_CFLAGS_OTHER`, `zlib_INCLUDE_DIRS`, `zlib_LIBRARIES`
+   On success establishes cmake variables `zlib_CFLAGS_OTHER`, `zlib_INCLUDE_DIRS`, `zlib_LIBRARIES`.
 3. `target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})`
    to tell compiler where to find zlib include files.
 4. `target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})`
@@ -559,4 +561,240 @@ $ ./build/hello --compress --hex --subject "all the lonely people"
 original   size:31
 compressed size:39
 compressed data: 78 9c f3 48 cd c9 c9 d7 51 48 cc c9 51 28 c9 48 55 c8 c9 cf 4b cd a9 54 28 48 cd 2f c8 49 55 e4 e2 02 00 ad 97 0a 68
+```
+
+## Example 6
+
+Add an install target.   This is a bit of a placeholder,  we'll need to expand on this later.
+
+Add to `CMakeLists.txt`:
+```
+install(TARGETS ${SELF_EXE}
+  RUNTIME DESTINATION bin COMPONENT Runtime
+  BUNDLE DESTINATION bin COMPONENT Runtime)
+```
+My understanding is that the BUNDLE line does something useful on MacOS,  and is otherwise harmless.
+
+Full `CMakeLists.txt` is now:
+```
+cmake_minimum_required(VERSION 3.25)
+project(ex1 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp compression.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
+target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
+install(TARGETS ${SELF_EXE}
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    BUNDLE DESTINATION bin COMPONENT Runtime)
+```
+
+To install to `~/scratch`:
+```
+$ PREFIX=$HOME/scratch
+$ mkdir -p $PREFIX
+$ cd cmake-examples
+$ mkdir -p build
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 33%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[ 66%] Building CXX object CMakeFiles/hello.dir/compression.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to ""
+$ tree $PREFIX
+/home/roland/scratch
+`-- bin
+    `-- hello
+
+1 directory, 1 file
+$ $PREFIX/bin/hello
+Hello, world!
+$
+```
+
+## Example 7
+
+Refactor to move compression code to a separately-installed library.
+This allows reusing our compression wrapper from some other executable.
+
+This involves multiple steps:
+1. create a dedicated subdirectory `compression/` to hold wrapper code,
+   i.e. `compression.cpp` and `compression.hpp`
+   (this isn't essential,  but good practice to allow for project growth)
+2. tell cmake to build new library `libcompression.so`;  instructions go in `compression/CMakeLists.txt`
+3. connect `compression/` subdirectory to the top-level `CMakeLists.txt` and simplify.
+
+```
+#compression/CmakeLists.txt
+set(SELF_LIB compression)
+set(SELF_SRCS compression.cpp)
+set(SELF_VERSION 2)
+set(SELF_SOVERSION 2.3)
+
+add_library(${SELF_LIB} SHARED ${SELF_SRCS})
+set_target_properties(${SELF_LIB} PROPERTIES VERSION ${SELF_VERSION} SOVERSION ${SELF_SOVERSION})
+target_include_directories(${SELF_LIB} PUBLIC
+    $<INSTALL_INTERFACE:include/compression>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/compression>)
+
+target_compile_options(${SELF_LIB} PRIVATE ${zlib_CFLAGS_OTHER})
+target_include_directories(${SELF_LIB} PRIVATE ${zlib_INCLUDE_DIRS})
+target_link_libraries(${SELF_LIB} PRIVATE ${zlib_LIBRARIES})
+
+install(
+    DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/compression
+    FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/compression)
+
+install(
+    TARGETS ${SELF_LIB}
+    LIBRARY DESTINATION lib COMPONENT Runtime
+    ARCHIVE DESTINATION lib COMPONENT Development
+    PUBLIC_HEADER DESTINATION include COMPONENT Development)
+```
+
+Top-level build:
+```
+# cmake-examples/CMakeLists.txt
+cmake_minimum_required(VERSION 3.25)
+project(ex1 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+add_subdirectory(compression)
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_include_directories(${SELF_EXE} PUBLIC compression/include)
+target_link_libraries(${SELF_EXE} PUBLIC compression)
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+
+install(TARGETS ${SELF_EXE}
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    BUNDLE DESTINATION bin COMPONENT Runtime)
+```
+
+Remarks:
+1. we have a separate `install` instruction for `libcompression.so`;
+   need it to install to `$PREFIX/lib` instead of `$PREFIX/bin`.
+
+2. `compression/CMakeLists.txt` isn't self-sufficient;
+   it only works as a satellite of `cmake-examples/CMakeLists.txt`.
+   For example,  it relies on top-level `CMakeLists.txt` to establish zlib-specific cmake variables.
+
+   We'd expect this to lead to maintenance problems in a project with many dependencies,
+   since we're creating distance between introduction and use of these dependency-specific cmake variables.
+
+3. If we imagine writing multiple libraries,  we're writing a dozen+ lines of boilerplate for each library;
+   we'll want to work to shrink this.
+
+4. We put compression `.hpp` header files in their own directory `compression/include`,  separate from `.cpp` files,
+   because we want to install the headers along with their associated library.
+   We're installing `.hpp` files to kitchen-sink `$PREFIX/include` directory;  will likely want to send to a library-specific
+   subdirectory instead,  to make life easier for downstream projects that want to cherry-pick.
+
+5. Although the compression library relies on `zlib`, `zlib.h` does not appear in `compression.hpp`;
+   so we mark the compression->zlib dependency `PRIVATE` for now.
+
+Details:
+1.
+in top-level `CMakeLists.txt`,  we added the line
+```
+target_include_directories(${SELF_EXE} PUBLIC compression/include)
+```
+so that in `hello.cpp` we can write
+```
+#include "compression.hpp"
+```
+instead of
+```
+#include "compression/include/compression.hpp"
+```
+
+2.
+This line in `compression/CMakeLists.txt`:
+```
+target_include_directories(${SELF_LIB} PUBLIC
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+```
+helps with mapping build-time behavior to install-time behavior.
+When compiling within build tree,  compiler should receive an argument like `-Ipath/to/source/compression/include`,
+referring to `.hpp` files in the source tree.
+Post-install, software that uses the compression library would instead need to have flag like `-I$PREFIX/include/compression`.
+When we extend build to publish cmake support files with installed compression library,
+that support will have to make this distinction.  For now it's a formality.
+
+Build + install:
+```
+$ PREFIX=/home/roland/scratch
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 25%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 50%] Linking CXX shared library libcompression.so
+[ 50%] Built target compression
+[ 75%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression/compression
+-- Installing: /home/roland/scratch/include/compression/compression/compression.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to ""
+$ tree ~/scratch
+/home/roland/scratch
+|-- bin
+|   `-- hello
+|-- include
+|   `-- compression
+|       `-- compression.hpp
+`-- lib
+    |-- libcompression.so -> libcompression.so.2.3
+    |-- libcompression.so.2
+    `-- libcompression.so.2.3 -> libcompression.so.2
+
+4 directories, 5 files
 ```
