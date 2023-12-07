@@ -16,6 +16,8 @@ pkg_check_modules(zlib REQUIRED zlib)
 #message("zlib_INCLUDE_DIRS=${zlib_INCLUDE_DIRS}")
 #message("zlib_LIBRARIES=${zlib_LIBRARIES}")
 
+#message("boost_program_options_DIR=${boost_program_options_DIR}")
+
 set(SELF_EXE hello)
 set(SELF_SRCS hello.cpp compression.cpp)
 
