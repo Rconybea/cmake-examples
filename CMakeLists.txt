@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(ex1 VERSION 1.0)
+project(ex8 VERSION 1.0)
 enable_language(CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
@@ -19,15 +19,4 @@ pkg_check_modules(zlib REQUIRED zlib)
 #message("boost_program_options_DIR=${boost_program_options_DIR}")
 
 add_subdirectory(compression)
-
-set(SELF_EXE hello)
-set(SELF_SRCS hello.cpp)
-
-add_executable(${SELF_EXE} ${SELF_SRCS})
-target_include_directories(${SELF_EXE} PUBLIC compression/include)
-target_link_libraries(${SELF_EXE} PUBLIC compression)
-target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
-
-install(TARGETS ${SELF_EXE}
-    RUNTIME DESTINATION bin COMPONENT Runtime
-    BUNDLE DESTINATION bin COMPONENT Runtime)
+add_subdirectory(app/hello)
