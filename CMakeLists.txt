@@ -26,3 +26,6 @@ target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
 target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
 target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
 target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
+install(TARGETS ${SELF_EXE}
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    BUNDLE DESTINATION bin COMPONENT Runtime)
