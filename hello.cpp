@@ -1,5 +1,7 @@
 // hello.cpp
 
+#include "compression.hpp"
+
 #include <boost/program_options.hpp>
 #include <zlib.h>
 #include <iostream>
@@ -38,31 +40,14 @@ main(int argc, char * argv[]) {
             string s = ss.str();
             std::vector<uint8_t> og_data_v(s.begin(), s.end());
 
-            /* required input space for zlib is (1.01 * input size) + 12;
-             * add +1 byte to avoid thinking about rounding
-             */
-            uint64_t z_data_z = (1.01 * og_data_v.size()) + 12 + 1;
-            uint8_t * z_data = reinterpret_cast<uint8_t *>(::malloc(z_data_z));
-            int32_t zresult = ::compress(z_data,
-                                         &z_data_z,
-                                         og_data_v.data(),
-                                         og_data_v.size());
-
-            switch (zresult) {
-            case Z_OK:
-                break;
-            case Z_MEM_ERROR:
-                throw std::runtime_error("zlib.compress: out of memory");
-            case Z_BUF_ERROR:
-                throw std::runtime_error("zlib.compress: output buffer too small");
-            }
+            std::vector<uint8_t> z_data_v = compression::deflate(og_data_v);
 
             if (vm.count("hex")) {
                 cout << "original   size:" << og_data_v.size() << endl;
-                cout << "compressed size:" << z_data_z << endl;
+                cout << "compressed size:" << z_data_v.size() << endl;
                 cout << "compressed data:";
-                for (uint64_t i = 0; i < z_data_z; ++i) {
-                    uint8_t zi = z_data[i];
+                for (uint64_t i = 0; i < z_data_v.size(); ++i) {
+                    uint8_t zi = z_data_v[i];
                     uint8_t hi = (zi >> 4);
                     uint8_t lo = (zi & 0x0f);
 
@@ -73,7 +58,8 @@ main(int argc, char * argv[]) {
                 }
                 cout << endl;
             } else {
-                cout.write(reinterpret_cast<char *>(z_data), z_data_z);
+                cout.write(reinterpret_cast<char *>(z_data_v.data()),
+                           z_data_v.size());
             }
         } else {
             cout << ss.str();

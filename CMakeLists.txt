@@ -17,7 +17,7 @@ pkg_check_modules(zlib REQUIRED zlib)
 #message("zlib_LIBRARIES=${zlib_LIBRARIES}")
 
 set(SELF_EXE hello)
-set(SELF_SRCS hello.cpp)
+set(SELF_SRCS hello.cpp compression.cpp)
 
 add_executable(${SELF_EXE} ${SELF_SRCS})
 target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
