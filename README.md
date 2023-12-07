@@ -689,6 +689,11 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
     set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
 endif()
 
+if(NOT CMAKE_INSTALL_RPATH)
+    set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib CACHE STRING
+        "runpath in installed libraries/executables")
+endif()
+
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
 pkg_check_modules(zlib REQUIRED zlib)
@@ -712,22 +717,25 @@ Remarks:
 1. we have a separate `install` instruction for `libcompression.so`;
    need it to install to `$PREFIX/lib` instead of `$PREFIX/bin`.
 
-2. `compression/CMakeLists.txt` isn't self-sufficient;
+2. installed executables (i.e. `hello`) need to be able to use libraries (i.e. `libcompression.so`) in `$PREFIX/lib`.
+   This is accomplished by setting `CMAKE_INSTALL_RPATH` in toplevel `CMakeLists.txt`
+
+3. `compression/CMakeLists.txt` isn't self-sufficient;
    it only works as a satellite of `cmake-examples/CMakeLists.txt`.
    For example,  it relies on top-level `CMakeLists.txt` to establish zlib-specific cmake variables.
 
    We'd expect this to lead to maintenance problems in a project with many dependencies,
    since we're creating distance between introduction and use of these dependency-specific cmake variables.
 
-3. If we imagine writing multiple libraries,  we're writing a dozen+ lines of boilerplate for each library;
+4. If we imagine writing multiple libraries,  we're writing a dozen+ lines of boilerplate for each library;
    we'll want to work to shrink this.
 
-4. We put compression `.hpp` header files in their own directory `compression/include`,  separate from `.cpp` files,
+5. We put compression `.hpp` header files in their own directory `compression/include`,  separate from `.cpp` files,
    because we want to install the headers along with their associated library.
    We're installing `.hpp` files to kitchen-sink `$PREFIX/include` directory;  will likely want to send to a library-specific
    subdirectory instead,  to make life easier for downstream projects that want to cherry-pick.
 
-5. Although the compression library relies on `zlib`, `zlib.h` does not appear in `compression.hpp`;
+6. Although the compression library relies on `zlib`, `zlib.h` does not appear in `compression.hpp`;
    so we mark the compression->zlib dependency `PRIVATE` for now.
 
 Details:
