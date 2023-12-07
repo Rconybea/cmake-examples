@@ -25,11 +25,14 @@ and to provide an opinionated (though possibly flawed) version of best practice
    binary API dependence
 
 ## Progression
-1. c++ executable X (branch ex1)
-2. add LSP integration (branch ex2)
-3. c++ executable X + cmake-aware outside library O1 (boost::program_options), using find_package()
-4. c++ executable X + non-cmake outside library O2 (zlib).
-5. c++ executable X + c++ library A1, monorepo-style
+1. ex1: c++ executable X
+2. ex2: add LSP integration
+3. ex3: c++ executable X + cmake-aware outside library O1 (boost::program_options), using find_package())
+4. ex4: c++ executable X + non-cmake outside library O2 (zlib)
+5. ex5: refactor: move compression wrapper to 2nd translation unit
+6. ex6: add install target
+
+7. ex7: c++ executable X + c++ library A1, monorepo-style
 
 5. c++ executable X + header-only library (catch2) + unit test
 5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.
@@ -559,4 +562,75 @@ $ ./build/hello --compress --hex --subject "all the lonely people"
 original   size:31
 compressed size:39
 compressed data: 78 9c f3 48 cd c9 c9 d7 51 48 cc c9 51 28 c9 48 55 c8 c9 cf 4b cd a9 54 28 48 cd 2f c8 49 55 e4 e2 02 00 ad 97 0a 68
+```
+
+## Example 6
+
+Add an install target.   This is a bit of a placeholder,  we'll need to expand on this later.
+
+Add to `CMakeLists.txt`:
+```
+install(TARGETS ${SELF_EXE}
+  RUNTIME DESTINATION bin COMPONENT Runtime
+  BUNDLE DESTINATION bin COMPONENT Runtime)
+```
+My understanding is that the BUNDLE line does something useful on MacOS,  and is otherwise harmless.
+
+Full `CMakeLists.txt` is now:
+```
+cmake_minimum_required(VERSION 3.25)
+project(ex1 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp compression.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
+target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
+install(TARGETS ${SELF_EXE}
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    BUNDLE DESTINATION bin COMPONENT Runtime)
+```
+
+To install to `~/scratch`:
+```
+$ PREFIX=$HOME/scratch
+$ mkdir -p $PREFIX
+$ cd cmake-examples
+$ mkdir -p build
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 33%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[ 66%] Building CXX object CMakeFiles/hello.dir/compression.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to ""
+$ tree $PREFIX
+/home/roland/scratch
+`-- bin
+    `-- hello
+
+1 directory, 1 file
+$ $PREFIX/bin/hello
+Hello, world!
+$
 ```
