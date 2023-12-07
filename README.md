@@ -27,9 +27,14 @@ and to provide an opinionated (though possibly flawed) version of best practice
 ## Progression
 1. c++ executable X (branch ex1)
 2. add LSP integration (branch ex2)
-3. c++ executable X + outside library O, using find_package()
-3. c++ executable X + library A, A -> O, monorepo-style.
-   X,A in same repo + build together.
+3. c++ executable X + cmake-aware outside library O1 (boost::program_options), using find_package()
+4. c++ executable X + non-cmake outside library O2 (zlib).
+5. c++ executable X + c++ library A1, monorepo-style
+
+5. c++ executable X + header-only library (catch2) + unit test
+5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.
+   X,A1 in same repo + build together.
+
 4. c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
 5. project-specific macros - simplify
@@ -397,6 +402,158 @@ $ cmake --build build
 ```
 
 use executable (compression working as well as can be expected on such short input)
+```
+$ ./build/hello --compress --hex --subject "all the lonely people"
+original   size:31
+compressed size:39
+compressed data: 78 9c f3 48 cd c9 c9 d7 51 48 cc c9 51 28 c9 48 55 c8 c9 cf 4b cd a9 54 28 48 cd 2f c8 49 55 e4 e2 02 00 ad 97 0a 68
+```
+
+## Example 5
+
+This example is a preparatory refactoring step:  we refactor our inline compression code to a separate translation unit;
+and while we're at it,  implement the reverse (inflation) operation.
+
+Add to `CMakeLists.txt`:
+1. new translation unit `compression.cpp`:
+   `set(SELF_SRCS hello.cpp compression.cpp)`
+
+```
+# CMakeLists.txt
+cmake_minimum_required(VERSION 3.25)
+project(ex1 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+#message("zlib_CFLAGS_OTHER=${zlib_CFLAGS_OTHER}")
+#message("zlib_INCLUDE_DIRS=${zlib_INCLUDE_DIRS}")
+#message("zlib_LIBRARIES=${zlib_LIBRARIES}")
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp compression.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_compile_options(${SELF_EXE} PUBLIC ${zlib_CFLAGS_OTHER})
+target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
+```
+
+New translation unit + header
+
+```
+// compression.hpp
+
+#pragma once
+
+#include <vector>
+#include <cstdint>
+
+/* thanks to Bobobobo's blog for zlib introduction
+ *   [[https://bobobobo.wordpress.comp/2008/02/23/how-to-use-zlib]]
+ * also
+ *   [[https://zlib.net/zlib_how.html]]
+ */
+struct compression {
+    /* compress contents of og_data_v[],  return compressed data */
+    static std::vector<std::uint8_t> deflate(std::vector<std::uint8_t> const & og_data_v);
+    /* uncompress contents of z_data_v[],  return uncompressed data.
+     * caller expected to remember original uncompressed size + supply in og_data_z,
+     * (or supply a sufficiently-large value)
+     */
+    static std::vector<std::uint8_t> inflate(std::vector<std::uint8_t> const & z_data_v,
+                                             std::uint64_t og_data_z);
+};
+```
+
+```
+// compression.cpp
+
+#include "compression.hpp"
+#include <zlib.h>
+#include <stdexcept>
+
+using namespace std;
+
+vector<uint8_t>
+compression::deflate(std::vector<uint8_t> const & og_data_v)
+{
+    /* required input space for zlib is (1.01 * input size) + 12;
+     * add +1 byte to avoid thinking about rounding
+     */
+    uint64_t z_data_z = (1.01 * og_data_v.size()) + 12 + 1;
+
+    vector<uint8_t> z_data_v(z_data_z);
+
+    int32_t zresult = ::compress(z_data_v.data(),
+                                 &z_data_z,
+                                 og_data_v.data(),
+                                 og_data_v.size());
+
+    switch (zresult) {
+    case Z_OK:
+        break;
+    case Z_MEM_ERROR:
+        throw std::runtime_error("compression::deflate: out of memory");
+    case Z_BUF_ERROR:
+        throw std::runtime_error("compression::deflate: output buffer too small");
+    }
+
+    return z_data_v;
+}
+
+vector<uint8_t>
+compression::inflate(vector<uint8_t> const & z_data_v,
+                     uint64_t og_data_z)
+{
+    vector<uint8_t> og_data_v(og_data_z);
+
+    int32_t zresult = ::uncompress(og_data_v.data(),
+                                   &og_data_z,
+                                   z_data_v.data(),
+                                   z_data_v.size());
+
+    switch (zresult) {
+    case Z_OK:
+        break;
+    case Z_MEM_ERROR:
+        throw std::runtime_error("compression::inflate: out of memory");
+    case Z_BUF_ERROR:
+        throw std::runtime_error("compression::inflate: output buffer too small");
+    }
+
+    og_data_v.resize(og_data_z);
+
+    return og_data_v;
+} /*inflate*/
+```
+
+To invoke build:
+```
+$ cd cmake-examples
+$ git checkout ex5
+$ mkdir -p build
+$ ln -s build/compile_commands.json
+$ cmake -B build
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 33%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+[ 66%] Linking CXX executable hello
+[100%] Built target hello
+```
+
+exercise executable
 ```
 $ ./build/hello --compress --hex --subject "all the lonely people"
 original   size:31
