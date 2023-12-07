@@ -16,6 +16,8 @@ pkg_check_modules(zlib REQUIRED zlib)
 #message("zlib_INCLUDE_DIRS=${zlib_INCLUDE_DIRS}")
 #message("zlib_LIBRARIES=${zlib_LIBRARIES}")
 
+#message("boost_program_options_DIR=${boost_program_options_DIR}")
+
 add_subdirectory(compression)
 
 set(SELF_EXE hello)
@@ -27,3 +29,7 @@ target_link_libraries(${SELF_EXE} PUBLIC compression)
 #target_include_directories(${SELF_EXE} PUBLIC ${zlib_INCLUDE_DIRS})
 target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
 #target_link_libraries(${SELF_EXE} PUBLIC ${zlib_LIBRARIES})
+
+install(TARGETS ${SELF_EXE}
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    BUNDLE DESTINATION bin COMPONENT Runtime)
