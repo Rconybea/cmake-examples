@@ -8,6 +8,11 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
     set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
 endif()
 
+if(NOT CMAKE_INSTALL_RPATH)
+    set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib CACHE STRING
+        "runpath in installed libraries/executables")
+endif()
+
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
 pkg_check_modules(zlib REQUIRED zlib)
