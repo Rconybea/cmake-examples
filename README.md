@@ -31,7 +31,9 @@ and to provide an opinionated (though possibly flawed) version of best practice
 4. ex4: c++ executable X + non-cmake outside library O2 (zlib)
 5. ex5: refactor: move compression wrapper to 2nd translation unit
 6. ex6: add install target
-7. ex7: c++ executable X + c++ library A1 (compression), monorepo-style
+7. ex7: c++ executable X1 + c++ library A1 (`compression`) with A1 -> O2, monorepo-style
+8. ex8: refactor: move X1 to own subdir
+9. ex9: c++ executable X2 (`myzip`) also using A1
 
 5. c++ executable X + header-only library (catch2) + unit test
 5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.

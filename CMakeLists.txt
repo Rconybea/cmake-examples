@@ -25,3 +25,4 @@ pkg_check_modules(zlib REQUIRED zlib)
 
 add_subdirectory(compression)
 add_subdirectory(app/hello)
+add_subdirectory(app/myzip)

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include <cstdint>
 
 /* thanks to Bobobobo's blog for zlib introduction
@@ -11,12 +12,25 @@
  *   [[https://zlib.net/zlib_how.html]]
  */
 struct compression {
-    /* compress contents of og_data_v[],  return compressed data */
-    static std::vector<std::uint8_t> deflate(std::vector<std::uint8_t> const & og_data_v);
     /* uncompress contents of z_data_v[],  return uncompressed data.
      * caller expected to remember original uncompressed size + supply in og_data_z,
      * (or supply a sufficiently-large value)
      */
     static std::vector<std::uint8_t> inflate(std::vector<std::uint8_t> const & z_data_v,
                                              std::uint64_t og_data_z);
+
+    /* compress contents of og_data_v[],  return compressed data */
+    static std::vector<std::uint8_t> deflate(std::vector<std::uint8_t> const & og_data_v);
+
+    /* compress file with path .in_file,  putting output in .out_file */
+    static void inflate_file(std::string const & in_file,
+                             std::string const & out_file,
+                             bool keep_flag = true,
+                             bool verbose_flag = false);
+
+    /* uncompress file with path .in_file,  putting uncompressed output in .out_file */
+    static void deflate_file(std::string const & in_file,
+                             std::string const & out_file,
+                             bool keep_flag = true,
+                             bool verbose_flag = false);
 };
