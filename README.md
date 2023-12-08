@@ -25,17 +25,17 @@ and to provide an opinionated (though possibly flawed) version of best practice
    binary API dependence
 
 ## Progression
-1. ex1: c++ executable X1 (`hello`)
-2. ex2: add LSP integration
-3. ex3: c++ executable X1 + cmake-aware outside library O1 (`boost::program_options`), using cmake `find_package()`)
-4. ex4: c++ executable X1 + non-cmake outside library O2 (`zlib`)
-5. ex5: refactor: move compression wrapper to 2nd translation unit
-6. ex6: add install target
-7. ex7: c++ executable X1 + c++ library A1 (`compression`) with A1 -> O2, monorepo-style
-8. ex8: refactor: move X1 to own subdir
-9. ex9: c++ executable X2 (`myzip`) also using A1
+1.  ex1:  c++ executable X1 (`hello`)
+2.  ex2:  add LSP integration
+3.  ex3:  c++ executable X1 + cmake-aware library dep O1 (`boost::program_options`), using cmake `find_package()`
+4.  ex4:  c++ executable X1 + non-cmake library dep O2 (`zlib`)
+5.  ex5:  refactor: move compression wrapper to 2nd translation unit
+6.  ex6:  add install target
+7.  ex7:  c++ executable X1 + example c++ library A1 (`compression`) with A1 -> O2, monorepo-style
+8.  ex8:  refactor: move X1 to own subdir
+9.  ex9:  add c++ executable X2 (`myzip`) also using A1
+10. ex10: add unit test + header-only library dep O3 (`catch2`)
 
-5. c++ executable X + header-only library (catch2) + unit test
 5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.
    X,A1 in same repo + build together.
 
@@ -1260,4 +1260,178 @@ $ tree ~/scratch
     `-- libcompression.so.2.3 -> libcompression.so.2
 
 4 directories, 7 files
+```
+
+## Example 10
+
+Add a c++ unit test,  using the `catch2` (header-only) library.
+
+```
+$ cd cmake-examples
+$ git checkout ex10
+```
+
+source tree:
+```
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       `-- myzip.cpp
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    |-- include
+    |   `-- compression
+    |       |-- compression.hpp
+    |       `-- tostr.hpp
+    `-- utest
+        |-- CMakeLists.txt
+        |-- compression.test.cpp
+        `-- compression_utest_main.cpp
+
+7 directories, 15 files
+```
+
+Changes:
+1. in top-level `CMakeLists.txt`:
+   First, add
+   ```
+   enable_testing()
+   ```
+   to active cmake's `ctest` feature
+
+   Second, add
+   ```
+   find_package(Catch2 CONFIG REQUIRED)
+   ```
+   to invoke cmake support provided by the `catch2` library
+
+   Third, add
+   ```
+   add_subdirectory(compression/utest)
+   ```
+   to use new `compression/utest/CMakeLists.txt`
+
+2. cmake instructions for new unit test executable `compression/utest/utest.compression`):
+   ```
+   # compression/utest/CMakeLists.txt
+
+   set(SELF_UTEST utest.compression)
+   set(SELF_SRCS compression_utest_main.cpp compression.test.cpp)
+
+   add_executable(${SELF_UTEST} ${SELF_SRCS})
+   target_link_libraries(${SELF_UTEST} PUBLIC compression)
+   target_link_libraries(${SELF_UTEST} PUBLIC Catch2::Catch2)
+
+   add_test(
+       NAME ${SELF_UTEST}
+       COMMAND ${SELF_UTEST})
+   ```
+
+   As far as cmake is concerned,  the `add_test()` call introduces a native c++ unit test executable.
+   Otherwise `CMakeLists.txt` look like that for a regular non-unit-test executable,
+   except that we omit install instructions since we choose not to install unit tests.
+
+3. Use catch2-provided main:
+   ```
+   # compression/utest/compression_utest_main.cpp
+
+   #define CATCH_CONFIG_MAIN
+   #include "catch2/catch.hpp"
+   ```
+
+4. Provide unit test implementation:
+   ```
+   // compression/utest/compression.test.cpp
+
+   #include "compression.hpp"
+   #include "tostr.hpp"
+   #include <catch2/catch.hpp>
+   #include <vector>
+   #include <string>
+
+   using namespace std;
+
+   namespace {
+       struct TestCase {
+           explicit TestCase(string const & og_text_arg) : og_text{og_text_arg} {}
+
+           string og_text;
+       };
+
+       static vector<TestCase> s_testcase_v = {
+           TestCase("The quick brown fox jumps over the lazy dog"),
+           TestCase("A man, a plan, a canal - Panama!")
+       };
+   }
+
+   TEST_CASE("compression", "[compression]") {
+       for (size_t i_tc = 0, n_tc = s_testcase_v.size(); i_tc < n_tc; ++i_tc) {
+           TestCase const & tcase = s_testcase_v[i_tc];
+
+           INFO(tostr("test case [", i_tc, "]: og_text [", tcase.og_text, "]"));
+
+           uint32_t og_data_z = tcase.og_text.size();
+           vector<uint8_t> og_data_v(tcase.og_text.data(),
+                                     tcase.og_text.data() + og_data_z);
+           vector<uint8_t> z_data_v = compression::deflate(og_data_v);
+           vector<uint8_t> og_data2_v = compression::inflate(z_data_v, og_data_z);
+
+           /* verify deflate->inflate recovers original text */
+           REQUIRE(og_data_v == og_data2_v);
+       }
+   }
+   ```
+
+Build:
+```
+$ PREFIX=/home/roland/scratch
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 11%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 22%] Linking CXX shared library libcompression.so
+[ 22%] Built target compression
+[ 33%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression_utest_main.cpp.o
+[ 44%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression.test.cpp.o
+[ 55%] Linking CXX executable utest.compression
+[ 55%] Built target utest.compression
+[ 66%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 77%] Linking CXX executable hello
+[ 77%] Built target hello
+[ 88%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+```
+
+Run unit test directly:
+```
+$ ./build/compression/utest/utest.compression
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+```
+
+Have `ctest` run our unit test (along with any other tests attached to cmake via `add_test()`):
+```
+$ (cd build && ctest)
+Test project /home/roland/proj/cmake-examples/build
+    Start 1: utest.compression
+1/1 Test #1: utest.compression ................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.00 sec
 ```

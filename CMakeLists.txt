@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 project(ex8 VERSION 1.0)
+enable_testing()
 enable_language(CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
@@ -13,6 +14,7 @@ if(NOT CMAKE_INSTALL_RPATH)
         "runpath in installed libraries/executables")
 endif()
 
+find_package(Catch2 CONFIG REQUIRED)
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
 pkg_check_modules(zlib REQUIRED zlib)
@@ -24,5 +26,6 @@ pkg_check_modules(zlib REQUIRED zlib)
 #message("boost_program_options_DIR=${boost_program_options_DIR}")
 
 add_subdirectory(compression)
+add_subdirectory(compression/utest)
 add_subdirectory(app/hello)
 add_subdirectory(app/myzip)
