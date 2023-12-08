@@ -223,6 +223,8 @@ cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
 
+...
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
@@ -334,6 +336,8 @@ We add to `CMakeLists.txt`:
 cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
+
+...
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
@@ -471,6 +475,8 @@ cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
 
+...
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
@@ -480,10 +486,6 @@ endif()
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
 pkg_check_modules(zlib REQUIRED zlib)
-
-#message("zlib_CFLAGS_OTHER=${zlib_CFLAGS_OTHER}")
-#message("zlib_INCLUDE_DIRS=${zlib_INCLUDE_DIRS}")
-#message("zlib_LIBRARIES=${zlib_LIBRARIES}")
 
 set(SELF_EXE hello)
 set(SELF_SRCS hello.cpp compression.cpp)
@@ -626,6 +628,8 @@ cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
 
+...
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
@@ -732,6 +736,8 @@ Top-level build:
 cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
+
+...
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
@@ -896,6 +902,8 @@ Top-level `CMakeLists.txt`:
 cmake_minimum_required(VERSION 3.25)
 project(ex8 VERSION 1.0)
 enable_language(CXX)
+
+...
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
