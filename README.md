@@ -26,6 +26,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
 
 ## Progression
 1.  ex1:  c++ executable X1 (`hello`)
+    ex1b: c++ standard + compile-time flags
 2.  ex2:  add LSP integration
 3.  ex3:  c++ executable X1 + cmake-aware library dep O1 (`boost::program_options`), using cmake `find_package()`
 4.  ex4:  c++ executable X1 + non-cmake library dep O2 (`zlib`)
@@ -34,10 +35,8 @@ and to provide an opinionated (though possibly flawed) version of best practice
 7.  ex7:  c++ executable X1 + example c++ library A1 (`compression`) with A1 -> O2, monorepo-style
 8.  ex8:  refactor: move X1 to own subdir
 9.  ex9:  add c++ executable X2 (`myzip`) also using A1
-10. ex10: add unit test + header-only library dep O3 (`catch2`)
-
-5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.
-   X,A1 in same repo + build together.
+10. ex10: add c++ unit test + header-only library dep O3 (`catch2`)
+11. ex11: add bash unit test (for `myzip`)
 
 4. c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
@@ -106,6 +105,50 @@ $ ./build/hello        # ..run
 Hello, world!
 
 $
+```
+
+### Example 1b: persistent compiler flags
+
+We want to be able set per-build-directory compiler flags,  and have them persist so we don't have to rehearse
+them every time we invoke cmake.
+We can do this using cmake cache variables:
+
+```
+$ git switch ex1b
+```
+
+In top-level CMakeLists.txt:
+```
+if (NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 23 CACHE STRING "c++ standard level [11|14|17|20|23]")
+endif()
+message("-- CMAKE_CXX_STANDARD: c++ standard level is [${CMAKE_CXX_STANDARD}]")
+
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+if (NOT DEFINED PROJECT_CXX_FLAGS)
+    set(PROJECT_CXX_FLAGS "-Werror -Wall -Wextra" CACHE STRING "project c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS: project c++ flags are [${PROJECT_CXX_FLAGS}]")
+```
+
+For example, to prepare a c++11 build in `build11/` with compiler's default compiler warnings:
+```
+$ cmake -DCMAKE_CXX_STANDARD=11 -DPROJECT_CXX_FLAGS= -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+```
+
+Now if we rerun cmake on `build11/` the cached settings are remembered:
+```
+$ cmake -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build11
 ```
 
 ## Example 2
@@ -1434,4 +1477,184 @@ Test project /home/roland/proj/cmake-examples/build
 100% tests passed, 0 tests failed out of 1
 
 Total Test time (real) =   0.00 sec
+```
+
+## Example 11
+
+Add a bash unit test,  to exercise the `myzip` app.
+
+```
+$ cd cmake-examples
+$ git checkout ex11
+```
+
+source tree:
+```
+$ tree
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       |-- myzip.cpp
+|       `-- utest
+|           |-- CMakeLists.txt
+|           |-- myzip.utest
+|           `-- textfile
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    |-- include
+    |   `-- compression
+    |       |-- compression.hpp
+    |       `-- tostr.hpp
+    `-- utest
+        |-- CMakeLists.txt
+        |-- compression.test.cpp
+        `-- compression_utest_main.cpp
+
+8 directories, 18 files
+```
+
+Changes:
+1. in top-level `CMakeLists.txt`:
+   First,  get location of `bash` executable:
+   ```
+   find_program(BASH_EXECUTABLE NAMES bash REQUIRED)
+   ```
+
+   Second,  add new unit test directory:
+   ```
+   add_subdirectory(app/myzip/utest)
+   ```
+
+   Note that `myzip/utest/CMakeLists.txt` must follow `myzip/CMakeLists.txt`,
+   because it relies on the `myzip` target established in the latter file.
+
+2. add `.cmake` file for unit test
+   ```
+   # app/myzip/utest/CMakeLists.txt
+
+   set(SELF_UTEST myzip.utest)
+
+   add_test(
+       NAME ${SELF_UTEST}
+       COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${SELF_UTEST} $<TARGET_FILE:myzip> ${CMAKE_CURRENT_SOURCE_DIR}/textfile)
+   ```
+
+3. add a test file `app/myzip/utest/textfile` to compress/uncompress:
+   ```
+   Jabberwocky,  by Lewis Carroll
+
+   'Twas brillig, and the slithy toves
+   ...
+   ```
+
+4. add bash script `app/myzip/utest/utest.myzip` implementing unit test
+   ```
+   #!/bin/bash
+
+   myzip=$1
+   file_path=$2
+   file=$(basename ${file_path})
+   file_mz=${file}.mz
+   file2=${file}2
+   file2_mz=${file2}.mz
+
+   rm -f ${file}
+   rm -f ${file_mz}
+   rm -f ${file2}
+   rm -f ${file2_mz}
+
+   #echo "myzip=${myzip}"
+   #echo "file_path=${file_path}"
+   #echo "file=${file}"
+   #echo "file_mz=${file_mz}"
+
+   cp ${file_path} ${file}
+
+   # deflate ${file} -> ${file_mz}
+   ${myzip} --keep ${file}
+
+   if [[ ! -f ${file_mz} ]]; then
+       >&2 echo "expected [${file_mz}] created\n"
+       exit 1
+   fi
+
+   cp ${file_mz} ${file2_mz}
+
+   # inflate ${file2_mz} back to ${file2}
+   ${myzip} ${file2_mz}
+
+   if [[ ! -f ${file2} ]]; then
+       >&2 echo "expected [${file2}] created\n"
+       exit 1
+   fi
+
+   diff ${file} ${file2}
+   err=$?
+
+   if [[ $err -ne 0 ]]; then
+       >&2 echo "expected [${file}] and [${file2}] to be identical"
+       exit 1
+   fi
+
+   # control here: unit test successful
+   ```
+
+Build:
+```
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 11%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 22%] Linking CXX shared library libcompression.so
+[ 22%] Built target compression
+[ 33%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression_utest_main.cpp.o
+[ 44%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression.test.cpp.o
+[ 55%] Linking CXX executable utest.compression
+[ 55%] Built target utest.compression
+[ 66%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 77%] Linking CXX executable hello
+[ 77%] Built target hello
+[ 88%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+```
+
+Run unit tests:
+```
+$ (cd build && ctest)
+Test project /home/roland/proj/cmake-examples/build
+    Start 1: utest.compression
+1/2 Test #1: utest.compression ................   Passed    0.00 sec
+    Start 2: myzip.utest
+2/2 Test #2: myzip.utest ......................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.01 sec
+```
+
+Can observe temporary files in `build/app/myzip/utest`:
+```
+$ ls -l build/app/myzip/utest
+total 32
+drwxr-xr-x 2 roland roland 4096 Dec  8 15:57 CMakeFiles
+-rw-r--r-- 1 roland roland  806 Dec  8 15:57 CTestTestfile.cmake
+-rw-r--r-- 1 roland roland 7322 Dec  8 15:57 Makefile
+-rw-r--r-- 1 roland roland 1330 Dec  8 15:57 cmake_install.cmake
+-rw-r--r-- 1 roland roland 1064 Dec  8 15:59 textfile
+-rw-r--r-- 1 roland roland 1087 Dec  8 15:59 textfile.mz
+-rw-r--r-- 1 roland roland 1064 Dec  8 15:59 textfile2
 ```
