@@ -25,17 +25,18 @@ and to provide an opinionated (though possibly flawed) version of best practice
    binary API dependence
 
 ## Progression
-1. ex1: c++ executable X
-2. ex2: add LSP integration
-3. ex3: c++ executable X + cmake-aware outside library O1 (boost::program_options), using find_package())
-4. ex4: c++ executable X + non-cmake outside library O2 (zlib)
-5. ex5: refactor: move compression wrapper to 2nd translation unit
-6. ex6: add install target
-7. ex7: c++ executable X + c++ library A1 (compression), monorepo-style
-
-5. c++ executable X + header-only library (catch2) + unit test
-5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.
-   X,A1 in same repo + build together.
+1.  ex1:  c++ executable X1 (`hello`)
+    ex1b: c++ standard + compile-time flags
+2.  ex2:  add LSP integration
+3.  ex3:  c++ executable X1 + cmake-aware library dep O1 (`boost::program_options`), using cmake `find_package()`
+4.  ex4:  c++ executable X1 + non-cmake library dep O2 (`zlib`)
+5.  ex5:  refactor: move compression wrapper to 2nd translation unit
+6.  ex6:  add install target
+7.  ex7:  c++ executable X1 + example c++ library A1 (`compression`) with A1 -> O2, monorepo-style
+8.  ex8:  refactor: move X1 to own subdir
+9.  ex9:  add c++ executable X2 (`myzip`) also using A1
+10. ex10: add c++ unit test + header-only library dep O3 (`catch2`)
+11. ex11: add bash unit test (for `myzip`)
 
 4. c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
@@ -104,6 +105,50 @@ $ ./build/hello        # ..run
 Hello, world!
 
 $
+```
+
+### Example 1b: persistent compiler flags
+
+We want to be able set per-build-directory compiler flags,  and have them persist so we don't have to rehearse
+them every time we invoke cmake.
+We can do this using cmake cache variables:
+
+```
+$ git switch ex1b
+```
+
+In top-level CMakeLists.txt:
+```
+if (NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 23 CACHE STRING "c++ standard level [11|14|17|20|23]")
+endif()
+message("-- CMAKE_CXX_STANDARD: c++ standard level is [${CMAKE_CXX_STANDARD}]")
+
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+if (NOT DEFINED PROJECT_CXX_FLAGS)
+    set(PROJECT_CXX_FLAGS "-Werror -Wall -Wextra" CACHE STRING "project c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS: project c++ flags are [${PROJECT_CXX_FLAGS}]")
+```
+
+For example, to prepare a c++11 build in `build11/` with compiler's default compiler warnings:
+```
+$ cmake -DCMAKE_CXX_STANDARD=11 -DPROJECT_CXX_FLAGS= -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+```
+
+Now if we rerun cmake on `build11/` the cached settings are remembered:
+```
+$ cmake -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build11
 ```
 
 ## Example 2
@@ -648,6 +693,11 @@ This involves multiple steps:
 3. connect `compression/` subdirectory to the top-level `CMakeLists.txt` and simplify.
 
 ```
+$ git checkout ex7
+```
+
+Library build:
+```
 #compression/CmakeLists.txt
 set(SELF_LIB compression)
 set(SELF_SRCS compression.cpp)
@@ -805,4 +855,806 @@ $ tree ~/scratch
     `-- libcompression.so.2.3 -> libcompression.so.2
 
 4 directories, 5 files
+```
+
+# Example 8
+
+Refactor to move executable `hello` to its own subdirectory,
+so organization is clearer when we have more than one executable.
+
+visit branch:
+```
+$ cd cmake-examples
+$ git checkout ex8
+```
+
+source tree:
+```
+$ tree
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   `-- hello
+|       |-- CMakeLists.txt
+|       `-- hello.cpp
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    `-- include
+        `-- compression
+            `-- compression.hpp
+
+5 directories, 9 files
+```
+
+Top-level `CMakeLists.txt`:
+```
+# cmake-examples/CMakeLists.txt
+cmake_minimum_required(VERSION 3.25)
+project(ex8 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+if(NOT CMAKE_INSTALL_RPATH)
+    set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib CACHE STRING
+        "runpath in installed libraries/executables")
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+add_subdirectory(compression)
+add_subdirectory(app/hello)
+```
+
+Cmake code moved from `cmake-examples/CMakeLists.txt` to new destination `cmake-examples/app/hello/CMakeLists.txt`:
+```
+# app/hello/CMakeLists.txt
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_include_directories(${SELF_EXE} PUBLIC ${PROJECT_SOURCE_DIR}/compression/include)
+target_link_libraries(${SELF_EXE} PUBLIC compression)
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+
+install(TARGETS ${SELF_EXE}
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    BUNDLE DESTINATION bin COMPONENT Runtime)
+```
+
+Build + install:
+```
+$ PREFIX=/home/roland/scratch
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 25%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 50%] Linking CXX shared library libcompression.so
+[ 50%] Built target compression
+[ 75%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression
+-- Installing: /home/roland/scratch/include/compression/compression.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Set runtime path of "/home/roland/scratch/lib/libcompression.so.2" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
+$ tree $PREFIX
+/home/roland/scratch
+|-- bin
+|   `-- hello
+|-- include
+|   `-- compression
+|       `-- compression.hpp
+`-- lib
+    |-- libcompression.so -> libcompression.so.2.3
+    |-- libcompression.so.2
+    `-- libcompression.so.2.3 -> libcompression.so.2
+
+4 directories, 5 files
+```
+
+## Example 9
+
+Add a (extremely naive) second application (`myzip`) to compress/uncompress files
+(amongst other problems, won't work on files > 1M).
+We put up with this to focus on the cmake build
+
+```
+$ cd cmake-examples
+$ git checkout ex9
+```
+
+source tree:
+```
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       `-- myzip.cpp
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    `-- include
+        `-- compression
+            |-- compression.hpp
+            `-- tostr.hpp
+
+6 directories, 12 files
+```
+
+Changes:
+1. in top-level `CMakeLists.txt` add:
+   ```
+   # cmake-examples/CMakeLists.txt
+   add_subdirectory(app/myzip)
+   ```
+
+2. add satellite .cmake file `app/myzip/CMakeLists.txt`, similar to `app/hello/CMakeLists.txt`:
+   ```
+   set(SELF_EXE myzip)
+   set(SELF_SRCS myzip.cpp)
+
+   add_executable(${SELF_EXE} ${SELF_SRCS})
+   target_include_directories(${SELF_EXE} PUBLIC ${PROJECT_SOURCE_DIR}/compression/include)
+   target_link_libraries(${SELF_EXE} PUBLIC compression)
+   target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+
+   install(TARGETS ${SELF_EXE}
+       RUNTIME DESTINATION bin COMPONENT Runtime
+       BUNDLE DESTINATION bin COMPONENT Runtime)
+   ```
+
+3. add utility header `compression/include/compression/tostr.hpp`:
+   ```
+   // tostr.hpp
+
+   #pragma once
+
+   #include <sstream>
+
+   /*   tostr(x1, x2, ...)
+    *
+    * is shorthand for something like:
+    *
+    *   {
+    *     stringstream s;
+    *     s << x1 << x2 << ...;
+    *     return s.str();
+    *   }
+    */
+
+
+   template<class Stream>
+   Stream & tos(Stream & s) { return s; }
+
+   template <class Stream, typename T>
+   Stream & tos(Stream & s, T && x) { s << x; return s; }
+
+   template <class Stream, typename T1, typename... Tn>
+   Stream & tos(Stream & s, T1 && x, Tn && ...rest) {
+       s << x;
+       return tos(s, rest...);
+   }
+
+   template <typename... Tn>
+   std::string tostr(Tn && ...args) {
+       std::stringstream ss;
+       tos(ss, args...);
+       return ss.str();
+   }
+   ```
+
+4. in `compression.hpp` and `compression.cpp` add methods `inflate_file()` and `deflate_file()`:
+
+   ```
+   # compression.hpp
+   /* compress file with path .in_file,  putting output in .out_file */
+   static void inflate_file(std::string const & in_file,
+                            std::string const & out_file,
+                            bool keep_flag = true,
+                            bool verbose_flag = false);
+
+   /* uncompress file with path .in_file,  putting uncompressed output in .out_file */
+   static void deflate_file(std::string const & in_file,
+                            std::string const & out_file,
+                            bool keep_flag = true,
+                            bool verbose_flag = false);
+   ```
+
+   ```
+   # compression.cpp
+   void
+   compression::inflate_file(std::string const & in_file,
+                             std::string const & out_file,
+                             bool keep_flag,
+                             bool verbose_flag)
+   {
+       /* check output doesn't exist already */
+       if (ifstream(out_file, ios::binary|ios::in))
+           throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
+
+       if (verbose_flag)
+           cerr << "compress::inflate_file: will compress [" << in_file << "] -> [" << out_file << "]" << endl;
+
+       /* open target file (start at end) */
+       ifstream fs(in_file, ios::binary|ios::ate);
+       if (!fs)
+           throw std::runtime_error(tostr("unable to open input file [", in_file, "]"));
+
+       auto z = fs.tellg();
+
+       /* read file content into memory */
+       if (verbose_flag)
+           cerr << "compress::inflate_file: read " << z << " bytes from [" << in_file << "] into memory" << endl;
+
+       vector<uint8_t> fs_data_v(z);
+       fs.seekg(0);
+       if (!fs.read(reinterpret_cast<char *>(&fs_data_v[0]), z))
+           throw std::runtime_error(tostr("unable to read contents of input file [", in_file, "]"));
+
+       vector<uint8_t> z_data_v = compression::deflate(fs_data_v);
+
+       /* write compresseed output */
+       ofstream zfs(out_file, ios::out|ios::binary);
+       zfs.write(reinterpret_cast<char *>(&(z_data_v[0])), z_data_v.size());
+
+       if (!zfs.good())
+           throw std::runtime_error(tostr("failed to write ", z_data_v.size(), " bytes to [", out_file, "]"));
+
+       /* control here only if successfully wrote uncompressed output */
+       if (!keep_flag)
+           remove(in_file.c_str());
+   } /*inflate_file*/
+
+   void
+   compression::deflate_file(std::string const & in_file,
+                             std::string const & out_file,
+                             bool keep_flag,
+                             bool verbose_flag)
+   {
+       /* check output doesn't exist already */
+       if (ifstream(out_file, ios::binary|ios::in))
+           throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
+
+       if (verbose_flag)
+           cerr << "compression::deflate_file will uncompress [" << in_file << "] -> [" << out_file << "]" << endl;
+
+       /* open target file (start at end) */
+       ifstream fs(in_file, ios::binary|ios::ate);
+       if (!fs)
+           throw std::runtime_error("unable to open input file");
+
+       auto z = fs.tellg();
+
+       /* read file contents into memory */
+       if (verbose_flag)
+           cerr << "compression::deflate_file: read " << z << " bytes from [" << in_file << "] into memory" << endl;
+
+       vector<uint8_t> fs_data_v(z);
+       fs.seekg(0);
+       if (!fs.read(reinterpret_cast<char *>(&fs_data_v[0]), z))
+           throw std::runtime_error(tostr("unable to read contents of input file [", in_file, "]"));
+
+       /* uncompress */
+       vector<uint8_t> og_data_v = compression::inflate(fs_data_v, 999999);
+
+       /* write uncompressed output */
+       ofstream ogfs(out_file, ios::out|ios::binary);
+       ogfs.write(reinterpret_cast<char *>(&(og_data_v[0])), og_data_v.size());
+
+       if (!ogfs.good())
+           throw std::runtime_error(tostr("failed to write ", og_data_v.size(), " bytes to [", out_file, "]"));
+
+       if (!keep_flag)
+           remove(in_file.c_str());
+   } /*deflate_file*/
+   ```
+
+5. add `app/myzip/myzip.cpp` application main
+   ```
+   // myzip.cpp
+
+   #include "compression.hpp"
+
+   #include <boost/program_options.hpp>
+   #include <zlib.h>
+   #include <iostream>
+   #include <fstream>
+
+   namespace po = boost::program_options;
+   using namespace std;
+
+   int
+   main(int argc, char * argv[]) {
+       po::options_description po_descr{"Options"};
+       po_descr.add_options()
+           ("help,h",
+            "this help")
+           ("keep,k",
+            "keep input files instead of deleting them")
+           ("verbose,v",
+            "enable to report progress messages to stderr")
+           ("input-file",
+            po::value<vector<string>>(),
+            "input file(s) to compress/uncompress")
+           ;
+
+       po::variables_map vm;
+
+       po::positional_options_description po_pos_args;
+       po_pos_args.add("input-file", -1);
+       po::store(po::command_line_parser(argc, argv)
+                 .options(po_descr)
+                 .positional(po_pos_args)
+                 .run(),
+                 vm);
+       po::notify(vm);
+
+       bool keep_flag = vm.count("keep");
+       bool verbose_flag = vm.count("verbose");
+
+       try {
+           if (vm.count("help")) {
+               cerr << po_descr << endl;
+           } else {
+               vector<string> input_file_l = vm["input-file"].as<vector<string>>();
+
+               for (string const & fname : input_file_l) {
+                   if (verbose_flag)
+                       cerr << "myzip: consider file [" << fname << "]" << endl;
+
+                   constexpr int32_t sfx_z = 3;
+
+                   if ((fname.size() > sfx_z) && (fname.substr(fname.size() - sfx_z, sfx_z) == ".mz")) {
+                       /* uncompress */
+
+                       string fname_mz = fname;
+                       string fname = fname_mz.substr(0, fname_mz.size() - sfx_z);
+
+                       compression::deflate_file(fname_mz, fname, keep_flag, verbose_flag);
+                   } else {
+                       /* compress */
+                       string fname_mz = fname + ".mz";
+
+                       compression::inflate_file(fname, fname_mz, keep_flag, verbose_flag);
+                   }
+               }
+           }
+       } catch(exception & ex) {
+           cerr << "error: myzip: " << ex.what() << endl;
+           return 1;
+       }
+
+       return 0;
+   }
+   ```
+
+Build + install:
+```
+$ PREFIX=/home/roland/scratch
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 16%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 33%] Linking CXX shared library libcompression.so
+[ 33%] Built target compression
+[ 50%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 66%] Linking CXX executable hello
+[ 66%] Built target hello
+[ 83%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression
+-- Installing: /home/roland/scratch/include/compression/tostr.hpp
+-- Installing: /home/roland/scratch/include/compression/compression.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Set runtime path of "/home/roland/scratch/lib/libcompression.so.2" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/bin/myzip
+-- Set runtime path of "/home/roland/scratch/bin/myzip" to "/home/roland/scratch/lib"
+$ tree ~/scratch
+/home/roland/scratch
+|-- bin
+|   |-- hello
+|   `-- myzip
+|-- include
+|   `-- compression
+|       |-- compression.hpp
+|       `-- tostr.hpp
+`-- lib
+    |-- libcompression.so -> libcompression.so.2.3
+    |-- libcompression.so.2
+    `-- libcompression.so.2.3 -> libcompression.so.2
+
+4 directories, 7 files
+```
+
+## Example 10
+
+Add a c++ unit test,  using the `catch2` (header-only) library.
+
+```
+$ cd cmake-examples
+$ git checkout ex10
+```
+
+source tree:
+```
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       `-- myzip.cpp
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    |-- include
+    |   `-- compression
+    |       |-- compression.hpp
+    |       `-- tostr.hpp
+    `-- utest
+        |-- CMakeLists.txt
+        |-- compression.test.cpp
+        `-- compression_utest_main.cpp
+
+7 directories, 15 files
+```
+
+Changes:
+1. in top-level `CMakeLists.txt`:
+   First, add
+   ```
+   enable_testing()
+   ```
+   to active cmake's `ctest` feature
+
+   Second, add
+   ```
+   find_package(Catch2 CONFIG REQUIRED)
+   ```
+   to invoke cmake support provided by the `catch2` library
+
+   Third, add
+   ```
+   add_subdirectory(compression/utest)
+   ```
+   to use new `compression/utest/CMakeLists.txt`
+
+2. cmake instructions for new unit test executable `compression/utest/utest.compression`):
+   ```
+   # compression/utest/CMakeLists.txt
+
+   set(SELF_UTEST utest.compression)
+   set(SELF_SRCS compression_utest_main.cpp compression.test.cpp)
+
+   add_executable(${SELF_UTEST} ${SELF_SRCS})
+   target_link_libraries(${SELF_UTEST} PUBLIC compression)
+   target_link_libraries(${SELF_UTEST} PUBLIC Catch2::Catch2)
+
+   add_test(
+       NAME ${SELF_UTEST}
+       COMMAND ${SELF_UTEST})
+   ```
+
+   As far as cmake is concerned,  the `add_test()` call introduces a native c++ unit test executable.
+   Otherwise `CMakeLists.txt` look like that for a regular non-unit-test executable,
+   except that we omit install instructions since we choose not to install unit tests.
+
+3. Use catch2-provided main:
+   ```
+   # compression/utest/compression_utest_main.cpp
+
+   #define CATCH_CONFIG_MAIN
+   #include "catch2/catch.hpp"
+   ```
+
+4. Provide unit test implementation:
+   ```
+   // compression/utest/compression.test.cpp
+
+   #include "compression.hpp"
+   #include "tostr.hpp"
+   #include <catch2/catch.hpp>
+   #include <vector>
+   #include <string>
+
+   using namespace std;
+
+   namespace {
+       struct TestCase {
+           explicit TestCase(string const & og_text_arg) : og_text{og_text_arg} {}
+
+           string og_text;
+       };
+
+       static vector<TestCase> s_testcase_v = {
+           TestCase("The quick brown fox jumps over the lazy dog"),
+           TestCase("A man, a plan, a canal - Panama!")
+       };
+   }
+
+   TEST_CASE("compression", "[compression]") {
+       for (size_t i_tc = 0, n_tc = s_testcase_v.size(); i_tc < n_tc; ++i_tc) {
+           TestCase const & tcase = s_testcase_v[i_tc];
+
+           INFO(tostr("test case [", i_tc, "]: og_text [", tcase.og_text, "]"));
+
+           uint32_t og_data_z = tcase.og_text.size();
+           vector<uint8_t> og_data_v(tcase.og_text.data(),
+                                     tcase.og_text.data() + og_data_z);
+           vector<uint8_t> z_data_v = compression::deflate(og_data_v);
+           vector<uint8_t> og_data2_v = compression::inflate(z_data_v, og_data_z);
+
+           /* verify deflate->inflate recovers original text */
+           REQUIRE(og_data_v == og_data2_v);
+       }
+   }
+   ```
+
+Build:
+```
+$ PREFIX=/home/roland/scratch
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 11%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 22%] Linking CXX shared library libcompression.so
+[ 22%] Built target compression
+[ 33%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression_utest_main.cpp.o
+[ 44%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression.test.cpp.o
+[ 55%] Linking CXX executable utest.compression
+[ 55%] Built target utest.compression
+[ 66%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 77%] Linking CXX executable hello
+[ 77%] Built target hello
+[ 88%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+```
+
+Run unit test directly:
+```
+$ ./build/compression/utest/utest.compression
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+```
+
+Have `ctest` run our unit test (along with any other tests attached to cmake via `add_test()`):
+```
+$ (cd build && ctest)
+Test project /home/roland/proj/cmake-examples/build
+    Start 1: utest.compression
+1/1 Test #1: utest.compression ................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.00 sec
+```
+
+## Example 11
+
+Add a bash unit test,  to exercise the `myzip` app.
+
+```
+$ cd cmake-examples
+$ git checkout ex11
+```
+
+source tree:
+```
+$ tree
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       |-- myzip.cpp
+|       `-- utest
+|           |-- CMakeLists.txt
+|           |-- myzip.utest
+|           `-- textfile
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    |-- include
+    |   `-- compression
+    |       |-- compression.hpp
+    |       `-- tostr.hpp
+    `-- utest
+        |-- CMakeLists.txt
+        |-- compression.test.cpp
+        `-- compression_utest_main.cpp
+
+8 directories, 18 files
+```
+
+Changes:
+1. in top-level `CMakeLists.txt`:
+   First,  get location of `bash` executable:
+   ```
+   find_program(BASH_EXECUTABLE NAMES bash REQUIRED)
+   ```
+
+   Second,  add new unit test directory:
+   ```
+   add_subdirectory(app/myzip/utest)
+   ```
+
+   Note that `myzip/utest/CMakeLists.txt` must follow `myzip/CMakeLists.txt`,
+   because it relies on the `myzip` target established in the latter file.
+
+2. add `.cmake` file for unit test
+   ```
+   # app/myzip/utest/CMakeLists.txt
+
+   set(SELF_UTEST myzip.utest)
+
+   add_test(
+       NAME ${SELF_UTEST}
+       COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${SELF_UTEST} $<TARGET_FILE:myzip> ${CMAKE_CURRENT_SOURCE_DIR}/textfile)
+   ```
+
+3. add a test file `app/myzip/utest/textfile` to compress/uncompress:
+   ```
+   Jabberwocky,  by Lewis Carroll
+
+   'Twas brillig, and the slithy toves
+   ...
+   ```
+
+4. add bash script `app/myzip/utest/utest.myzip` implementing unit test
+   ```
+   #!/bin/bash
+
+   myzip=$1
+   file_path=$2
+   file=$(basename ${file_path})
+   file_mz=${file}.mz
+   file2=${file}2
+   file2_mz=${file2}.mz
+
+   rm -f ${file}
+   rm -f ${file_mz}
+   rm -f ${file2}
+   rm -f ${file2_mz}
+
+   #echo "myzip=${myzip}"
+   #echo "file_path=${file_path}"
+   #echo "file=${file}"
+   #echo "file_mz=${file_mz}"
+
+   cp ${file_path} ${file}
+
+   # deflate ${file} -> ${file_mz}
+   ${myzip} --keep ${file}
+
+   if [[ ! -f ${file_mz} ]]; then
+       >&2 echo "expected [${file_mz}] created\n"
+       exit 1
+   fi
+
+   cp ${file_mz} ${file2_mz}
+
+   # inflate ${file2_mz} back to ${file2}
+   ${myzip} ${file2_mz}
+
+   if [[ ! -f ${file2} ]]; then
+       >&2 echo "expected [${file2}] created\n"
+       exit 1
+   fi
+
+   diff ${file} ${file2}
+   err=$?
+
+   if [[ $err -ne 0 ]]; then
+       >&2 echo "expected [${file}] and [${file2}] to be identical"
+       exit 1
+   fi
+
+   # control here: unit test successful
+   ```
+
+Build:
+```
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 11%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 22%] Linking CXX shared library libcompression.so
+[ 22%] Built target compression
+[ 33%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression_utest_main.cpp.o
+[ 44%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression.test.cpp.o
+[ 55%] Linking CXX executable utest.compression
+[ 55%] Built target utest.compression
+[ 66%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 77%] Linking CXX executable hello
+[ 77%] Built target hello
+[ 88%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+```
+
+Run unit tests:
+```
+$ (cd build && ctest)
+Test project /home/roland/proj/cmake-examples/build
+    Start 1: utest.compression
+1/2 Test #1: utest.compression ................   Passed    0.00 sec
+    Start 2: myzip.utest
+2/2 Test #2: myzip.utest ......................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.01 sec
+```
+
+Can observe temporary files in `build/app/myzip/utest`:
+```
+$ ls -l build/app/myzip/utest
+total 32
+drwxr-xr-x 2 roland roland 4096 Dec  8 15:57 CMakeFiles
+-rw-r--r-- 1 roland roland  806 Dec  8 15:57 CTestTestfile.cmake
+-rw-r--r-- 1 roland roland 7322 Dec  8 15:57 Makefile
+-rw-r--r-- 1 roland roland 1330 Dec  8 15:57 cmake_install.cmake
+-rw-r--r-- 1 roland roland 1064 Dec  8 15:59 textfile
+-rw-r--r-- 1 roland roland 1087 Dec  8 15:59 textfile.mz
+-rw-r--r-- 1 roland roland 1064 Dec  8 15:59 textfile2
 ```
