@@ -1,0 +1,48 @@
+#!/bin/bash
+
+myzip=$1
+file_path=$2
+file=$(basename ${file_path})
+file_mz=${file}.mz
+file2=${file}2
+file2_mz=${file2}.mz
+
+rm -f ${file}
+rm -f ${file_mz}
+rm -f ${file2}
+rm -f ${file2_mz}
+
+#echo "myzip=${myzip}"
+#echo "file_path=${file_path}"
+#echo "file=${file}"
+#echo "file_mz=${file_mz}"
+
+cp ${file_path} ${file}
+
+# deflate ${file} -> ${file_mz}
+${myzip} --keep ${file}
+
+if [[ ! -f ${file_mz} ]]; then
+    >&2 echo "expected [${file_mz}] created\n"
+    exit 1
+fi
+
+cp ${file_mz} ${file2_mz}
+
+# inflate ${file2_mz} back to ${file2}
+${myzip} ${file2_mz}
+
+if [[ ! -f ${file2} ]]; then
+    >&2 echo "expected [${file2}] created\n"
+    exit 1
+fi
+
+diff ${file} ${file2}
+err=$?
+
+if [[ $err -ne 0 ]]; then
+    >&2 echo "expected [${file}] and [${file2}] to be identical"
+    exit 1
+fi
+
+# control here: unit test successful

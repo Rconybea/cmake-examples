@@ -19,6 +19,8 @@ find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
 pkg_check_modules(zlib REQUIRED zlib)
 
+find_program(BASH_EXECUTABLE NAMES bash REQUIRED)
+
 #message("zlib_CFLAGS_OTHER=${zlib_CFLAGS_OTHER}")
 #message("zlib_INCLUDE_DIRS=${zlib_INCLUDE_DIRS}")
 #message("zlib_LIBRARIES=${zlib_LIBRARIES}")
@@ -29,3 +31,4 @@ add_subdirectory(compression)
 add_subdirectory(compression/utest)
 add_subdirectory(app/hello)
 add_subdirectory(app/myzip)
+add_subdirectory(app/myzip/utest)
