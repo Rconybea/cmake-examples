@@ -13,13 +13,13 @@ and to provide an opinionated (though possibly flawed) version of best practice
 ## Topics
 1. lsp integration.
    tested with emacs
-2. github actions
-3. executables, shared libraries, interdependencies
-4. header-only libraries
-5. monorepo build
+2. executables, shared libraries, interdependencies
+3. header-only libraries
+4. monorepo build
    limitations of monorepo build
-6. separable build (+ find_package() support)
+5. separable build (+ find_package() support)
    limitations of separable build
+6. github actions
 7. versioning, explicit codebase dependencies, build isolation
 8. pybind11 + python issues
    binary API dependence
