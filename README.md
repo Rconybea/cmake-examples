@@ -26,6 +26,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
 
 ## Progression
 1.  ex1:  c++ executable X1 (`hello`)
+    ex1b: c++ standard + compile-time flags
 2.  ex2:  add LSP integration
 3.  ex3:  c++ executable X1 + cmake-aware library dep O1 (`boost::program_options`), using cmake `find_package()`
 4.  ex4:  c++ executable X1 + non-cmake library dep O2 (`zlib`)
@@ -104,6 +105,50 @@ $ ./build/hello        # ..run
 Hello, world!
 
 $
+```
+
+### Example 1b: persistent compiler flags
+
+We want to be able set per-build-directory compiler flags,  and have them persist so we don't have to rehearse
+them every time we invoke cmake.
+We can do this using cmake cache variables:
+
+```
+$ git switch ex1b
+```
+
+In top-level CMakeLists.txt:
+```
+if (NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 23 CACHE STRING "c++ standard level [11|14|17|20|23]")
+endif()
+message("-- CMAKE_CXX_STANDARD: c++ standard level is [${CMAKE_CXX_STANDARD}]")
+
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+if (NOT DEFINED PROJECT_CXX_FLAGS)
+    set(PROJECT_CXX_FLAGS "-Werror -Wall -Wextra" CACHE STRING "project c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS: project c++ flags are [${PROJECT_CXX_FLAGS}]")
+```
+
+For example, to prepare a c++11 build in `build11/` with compiler's default compiler warnings:
+```
+$ cmake -DCMAKE_CXX_STANDARD=11 -DPROJECT_CXX_FLAGS= -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+```
+
+Now if we rerun cmake on `build11/` the cached settings are remembered:
+```
+$ cmake -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build11
 ```
 
 ## Example 2
