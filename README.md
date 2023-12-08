@@ -893,6 +893,7 @@ Build + install:
 ```
 $ PREFIX=/home/roland/scratch
 $ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
 ...
 -- Configuring done
 -- Generating done
@@ -927,4 +928,336 @@ $ tree $PREFIX
     `-- libcompression.so.2.3 -> libcompression.so.2
 
 4 directories, 5 files
+```
+
+## Example 9
+
+Add a (extremely naive) second application (`myzip`) to compress/uncompress files
+(amongst other problems, won't work on files > 1M).
+We put up with this to focus on the cmake build
+
+```
+$ cd cmake-examples
+$ git checkout ex9
+```
+
+source tree:
+```
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       `-- myzip.cpp
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    `-- include
+        `-- compression
+            |-- compression.hpp
+            `-- tostr.hpp
+
+6 directories, 12 files
+```
+
+Changes:
+1. in top-level `CMakeLists.txt` add:
+   ```
+   # cmake-examples/CMakeLists.txt
+   add_subdirectory(app/myzip)
+   ```
+
+2. add satellite .cmake file `app/myzip/CMakeLists.txt`, similar to `app/hello/CMakeLists.txt`:
+   ```
+   set(SELF_EXE myzip)
+   set(SELF_SRCS myzip.cpp)
+
+   add_executable(${SELF_EXE} ${SELF_SRCS})
+   target_include_directories(${SELF_EXE} PUBLIC ${PROJECT_SOURCE_DIR}/compression/include)
+   target_link_libraries(${SELF_EXE} PUBLIC compression)
+   target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+
+   install(TARGETS ${SELF_EXE}
+       RUNTIME DESTINATION bin COMPONENT Runtime
+       BUNDLE DESTINATION bin COMPONENT Runtime)
+   ```
+
+3. add utility header `compression/include/compression/tostr.hpp`:
+   ```
+   // tostr.hpp
+
+   #pragma once
+
+   #include <sstream>
+
+   /*   tostr(x1, x2, ...)
+    *
+    * is shorthand for something like:
+    *
+    *   {
+    *     stringstream s;
+    *     s << x1 << x2 << ...;
+    *     return s.str();
+    *   }
+    */
+
+
+   template<class Stream>
+   Stream & tos(Stream & s) { return s; }
+
+   template <class Stream, typename T>
+   Stream & tos(Stream & s, T && x) { s << x; return s; }
+
+   template <class Stream, typename T1, typename... Tn>
+   Stream & tos(Stream & s, T1 && x, Tn && ...rest) {
+       s << x;
+       return tos(s, rest...);
+   }
+
+   template <typename... Tn>
+   std::string tostr(Tn && ...args) {
+       std::stringstream ss;
+       tos(ss, args...);
+       return ss.str();
+   }
+   ```
+
+4. in `compression.hpp` and `compression.cpp` add methods `inflate_file()` and `deflate_file()`:
+
+   ```
+   # compression.hpp
+   /* compress file with path .in_file,  putting output in .out_file */
+   static void inflate_file(std::string const & in_file,
+                            std::string const & out_file,
+                            bool keep_flag = true,
+                            bool verbose_flag = false);
+
+   /* uncompress file with path .in_file,  putting uncompressed output in .out_file */
+   static void deflate_file(std::string const & in_file,
+                            std::string const & out_file,
+                            bool keep_flag = true,
+                            bool verbose_flag = false);
+   ```
+
+   ```
+   # compression.cpp
+   void
+   compression::inflate_file(std::string const & in_file,
+                             std::string const & out_file,
+                             bool keep_flag,
+                             bool verbose_flag)
+   {
+       /* check output doesn't exist already */
+       if (ifstream(out_file, ios::binary|ios::in))
+           throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
+
+       if (verbose_flag)
+           cerr << "compress::inflate_file: will compress [" << in_file << "] -> [" << out_file << "]" << endl;
+
+       /* open target file (start at end) */
+       ifstream fs(in_file, ios::binary|ios::ate);
+       if (!fs)
+           throw std::runtime_error(tostr("unable to open input file [", in_file, "]"));
+
+       auto z = fs.tellg();
+
+       /* read file content into memory */
+       if (verbose_flag)
+           cerr << "compress::inflate_file: read " << z << " bytes from [" << in_file << "] into memory" << endl;
+
+       vector<uint8_t> fs_data_v(z);
+       fs.seekg(0);
+       if (!fs.read(reinterpret_cast<char *>(&fs_data_v[0]), z))
+           throw std::runtime_error(tostr("unable to read contents of input file [", in_file, "]"));
+
+       vector<uint8_t> z_data_v = compression::deflate(fs_data_v);
+
+       /* write compresseed output */
+       ofstream zfs(out_file, ios::out|ios::binary);
+       zfs.write(reinterpret_cast<char *>(&(z_data_v[0])), z_data_v.size());
+
+       if (!zfs.good())
+           throw std::runtime_error(tostr("failed to write ", z_data_v.size(), " bytes to [", out_file, "]"));
+
+       /* control here only if successfully wrote uncompressed output */
+       if (!keep_flag)
+           remove(in_file.c_str());
+   } /*inflate_file*/
+
+   void
+   compression::deflate_file(std::string const & in_file,
+                             std::string const & out_file,
+                             bool keep_flag,
+                             bool verbose_flag)
+   {
+       /* check output doesn't exist already */
+       if (ifstream(out_file, ios::binary|ios::in))
+           throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
+
+       if (verbose_flag)
+           cerr << "compression::deflate_file will uncompress [" << in_file << "] -> [" << out_file << "]" << endl;
+
+       /* open target file (start at end) */
+       ifstream fs(in_file, ios::binary|ios::ate);
+       if (!fs)
+           throw std::runtime_error("unable to open input file");
+
+       auto z = fs.tellg();
+
+       /* read file contents into memory */
+       if (verbose_flag)
+           cerr << "compression::deflate_file: read " << z << " bytes from [" << in_file << "] into memory" << endl;
+
+       vector<uint8_t> fs_data_v(z);
+       fs.seekg(0);
+       if (!fs.read(reinterpret_cast<char *>(&fs_data_v[0]), z))
+           throw std::runtime_error(tostr("unable to read contents of input file [", in_file, "]"));
+
+       /* uncompress */
+       vector<uint8_t> og_data_v = compression::inflate(fs_data_v, 999999);
+
+       /* write uncompressed output */
+       ofstream ogfs(out_file, ios::out|ios::binary);
+       ogfs.write(reinterpret_cast<char *>(&(og_data_v[0])), og_data_v.size());
+
+       if (!ogfs.good())
+           throw std::runtime_error(tostr("failed to write ", og_data_v.size(), " bytes to [", out_file, "]"));
+
+       if (!keep_flag)
+           remove(in_file.c_str());
+   } /*deflate_file*/
+   ```
+
+5. add `app/myzip/myzip.cpp` application main
+   ```
+   // myzip.cpp
+
+   #include "compression.hpp"
+
+   #include <boost/program_options.hpp>
+   #include <zlib.h>
+   #include <iostream>
+   #include <fstream>
+
+   namespace po = boost::program_options;
+   using namespace std;
+
+   int
+   main(int argc, char * argv[]) {
+       po::options_description po_descr{"Options"};
+       po_descr.add_options()
+           ("help,h",
+            "this help")
+           ("keep,k",
+            "keep input files instead of deleting them")
+           ("verbose,v",
+            "enable to report progress messages to stderr")
+           ("input-file",
+            po::value<vector<string>>(),
+            "input file(s) to compress/uncompress")
+           ;
+
+       po::variables_map vm;
+
+       po::positional_options_description po_pos_args;
+       po_pos_args.add("input-file", -1);
+       po::store(po::command_line_parser(argc, argv)
+                 .options(po_descr)
+                 .positional(po_pos_args)
+                 .run(),
+                 vm);
+       po::notify(vm);
+
+       bool keep_flag = vm.count("keep");
+       bool verbose_flag = vm.count("verbose");
+
+       try {
+           if (vm.count("help")) {
+               cerr << po_descr << endl;
+           } else {
+               vector<string> input_file_l = vm["input-file"].as<vector<string>>();
+
+               for (string const & fname : input_file_l) {
+                   if (verbose_flag)
+                       cerr << "myzip: consider file [" << fname << "]" << endl;
+
+                   constexpr int32_t sfx_z = 3;
+
+                   if ((fname.size() > sfx_z) && (fname.substr(fname.size() - sfx_z, sfx_z) == ".mz")) {
+                       /* uncompress */
+
+                       string fname_mz = fname;
+                       string fname = fname_mz.substr(0, fname_mz.size() - sfx_z);
+
+                       compression::deflate_file(fname_mz, fname, keep_flag, verbose_flag);
+                   } else {
+                       /* compress */
+                       string fname_mz = fname + ".mz";
+
+                       compression::inflate_file(fname, fname_mz, keep_flag, verbose_flag);
+                   }
+               }
+           }
+       } catch(exception & ex) {
+           cerr << "error: myzip: " << ex.what() << endl;
+           return 1;
+       }
+
+       return 0;
+   }
+   ```
+
+Build + install:
+```
+$ PREFIX=/home/roland/scratch
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 16%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 33%] Linking CXX shared library libcompression.so
+[ 33%] Built target compression
+[ 50%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 66%] Linking CXX executable hello
+[ 66%] Built target hello
+[ 83%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression
+-- Installing: /home/roland/scratch/include/compression/tostr.hpp
+-- Installing: /home/roland/scratch/include/compression/compression.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Set runtime path of "/home/roland/scratch/lib/libcompression.so.2" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/bin/myzip
+-- Set runtime path of "/home/roland/scratch/bin/myzip" to "/home/roland/scratch/lib"
+$ tree ~/scratch
+/home/roland/scratch
+|-- bin
+|   |-- hello
+|   `-- myzip
+|-- include
+|   `-- compression
+|       |-- compression.hpp
+|       `-- tostr.hpp
+`-- lib
+    |-- libcompression.so -> libcompression.so.2.3
+    |-- libcompression.so.2
+    `-- libcompression.so.2.3 -> libcompression.so.2
+
+4 directories, 7 files
 ```
