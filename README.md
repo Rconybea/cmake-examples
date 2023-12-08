@@ -25,13 +25,14 @@ and to provide an opinionated (though possibly flawed) version of best practice
    binary API dependence
 
 ## Progression
-1. ex1: c++ executable X
+1. ex1: c++ executable X1 (`hello`)
 2. ex2: add LSP integration
-3. ex3: c++ executable X + cmake-aware outside library O1 (boost::program_options), using find_package())
-4. ex4: c++ executable X + non-cmake outside library O2 (zlib)
+3. ex3: c++ executable X1 + cmake-aware outside library O1 (`boost::program_options`), using cmake `find_package()`)
+4. ex4: c++ executable X1 + non-cmake outside library O2 (`zlib`)
 5. ex5: refactor: move compression wrapper to 2nd translation unit
 6. ex6: add install target
-7. ex7: c++ executable X + c++ library A1 (compression), monorepo-style
+7. ex7: c++ executable X1 + c++ library A1 (`compression`) with A1 -> O2, monorepo-style
+8. ex8: refactor: move X1 to own subdir
 
 5. c++ executable X + header-only library (catch2) + unit test
 5. c++ executable X + c++ library A1, A1 -> O2, monorepo-style.
@@ -648,6 +649,11 @@ This involves multiple steps:
 3. connect `compression/` subdirectory to the top-level `CMakeLists.txt` and simplify.
 
 ```
+$ git checkout ex7
+```
+
+Library build:
+```
 #compression/CmakeLists.txt
 set(SELF_LIB compression)
 set(SELF_SRCS compression.cpp)
@@ -793,6 +799,121 @@ $ cmake --install build
 -- Installing: /home/roland/scratch/bin/hello
 -- Set runtime path of "/home/roland/scratch/bin/hello" to ""
 $ tree ~/scratch
+/home/roland/scratch
+|-- bin
+|   `-- hello
+|-- include
+|   `-- compression
+|       `-- compression.hpp
+`-- lib
+    |-- libcompression.so -> libcompression.so.2.3
+    |-- libcompression.so.2
+    `-- libcompression.so.2.3 -> libcompression.so.2
+
+4 directories, 5 files
+```
+
+# Example 8
+
+Refactor to move executable `hello` to its own subdirectory,
+so organization is clearer when we have more than one executable.
+
+visit branch:
+```
+$ cd cmake-examples
+$ git checkout ex8
+```
+
+source tree:
+```
+$ tree
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   `-- hello
+|       |-- CMakeLists.txt
+|       `-- hello.cpp
+|-- compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    `-- include
+        `-- compression
+            `-- compression.hpp
+
+5 directories, 9 files
+```
+
+Top-level `CMakeLists.txt`:
+```
+# cmake-examples/CMakeLists.txt
+cmake_minimum_required(VERSION 3.25)
+project(ex8 VERSION 1.0)
+enable_language(CXX)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
+if(NOT CMAKE_INSTALL_RPATH)
+    set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib CACHE STRING
+        "runpath in installed libraries/executables")
+endif()
+
+find_package(boost_program_options CONFIG REQUIRED)
+find_package(PkgConfig)
+pkg_check_modules(zlib REQUIRED zlib)
+
+add_subdirectory(compression)
+add_subdirectory(app/hello)
+```
+
+Cmake code moved from `cmake-examples/CMakeLists.txt` to new destination `cmake-examples/app/hello/CMakeLists.txt`:
+```
+# app/hello/CMakeLists.txt
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+target_include_directories(${SELF_EXE} PUBLIC ${PROJECT_SOURCE_DIR}/compression/include)
+target_link_libraries(${SELF_EXE} PUBLIC compression)
+target_link_libraries(${SELF_EXE} PUBLIC Boost::program_options)
+
+install(TARGETS ${SELF_EXE}
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    BUNDLE DESTINATION bin COMPONENT Runtime)
+```
+
+Build + install:
+```
+$ PREFIX=/home/roland/scratch
+$ cd cmake-examples
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[ 25%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 50%] Linking CXX shared library libcompression.so
+[ 50%] Built target compression
+[ 75%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[100%] Linking CXX executable hello
+[100%] Built target hello
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression
+-- Installing: /home/roland/scratch/include/compression/compression.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Set runtime path of "/home/roland/scratch/lib/libcompression.so.2" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
+$ tree $PREFIX
 /home/roland/scratch
 |-- bin
 |   `-- hello
