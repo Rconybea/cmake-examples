@@ -13,19 +13,20 @@ and to provide an opinionated (though possibly flawed) version of best practice
 ## Topics
 1. lsp integration.
    tested with emacs
-2. github actions
-3. executables, shared libraries, interdependencies
-4. header-only libraries
-5. monorepo build
+2. executables, shared libraries, interdependencies
+3. header-only libraries
+4. monorepo build
    limitations of monorepo build
-6. separable build (+ find_package() support)
+5. separable build (+ find_package() support)
    limitations of separable build
+6. github actions
 7. versioning, explicit codebase dependencies, build isolation
 8. pybind11 + python issues
    binary API dependence
 
 ## Progression
 1.  ex1:  c++ executable X1 (`hello`)
+    ex1b: c++ standard + compile-time flags
 2.  ex2:  add LSP integration
 3.  ex3:  c++ executable X1 + cmake-aware library dep O1 (`boost::program_options`), using cmake `find_package()`
 4.  ex4:  c++ executable X1 + non-cmake library dep O2 (`zlib`)
@@ -106,6 +107,50 @@ Hello, world!
 $
 ```
 
+### Example 1b: persistent compiler flags
+
+We want to be able set per-build-directory compiler flags,  and have them persist so we don't have to rehearse
+them every time we invoke cmake.
+We can do this using cmake cache variables:
+
+```
+$ git switch ex1b
+```
+
+In top-level CMakeLists.txt:
+```
+if (NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 23 CACHE STRING "c++ standard level [11|14|17|20|23]")
+endif()
+message("-- CMAKE_CXX_STANDARD: c++ standard level is [${CMAKE_CXX_STANDARD}]")
+
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+if (NOT DEFINED PROJECT_CXX_FLAGS)
+    set(PROJECT_CXX_FLAGS "-Werror -Wall -Wextra" CACHE STRING "project c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS: project c++ flags are [${PROJECT_CXX_FLAGS}]")
+```
+
+For example, to prepare a c++11 build in `build11/` with compiler's default compiler warnings:
+```
+$ cmake -DCMAKE_CXX_STANDARD=11 -DPROJECT_CXX_FLAGS= -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+```
+
+Now if we rerun cmake on `build11/` the cached settings are remembered:
+```
+$ cmake -B build11
+-- CMAKE_CXX_STANDARD: c++ standard level is [11]
+-- PROJECT_CXX_FLAGS: project c++ flags are []
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build11
+```
+
 ## Example 2
 
 LSP (language server process) integration allows compiler-driven editor interaction -- syntax highlighting,  code navigation etc.
@@ -177,6 +222,8 @@ We add two lines to `CMakeLists.txt`:
 cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
+
+...
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
@@ -289,6 +336,8 @@ We add to `CMakeLists.txt`:
 cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
+
+...
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
@@ -426,6 +475,8 @@ cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
 
+...
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
@@ -435,10 +486,6 @@ endif()
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
 pkg_check_modules(zlib REQUIRED zlib)
-
-#message("zlib_CFLAGS_OTHER=${zlib_CFLAGS_OTHER}")
-#message("zlib_INCLUDE_DIRS=${zlib_INCLUDE_DIRS}")
-#message("zlib_LIBRARIES=${zlib_LIBRARIES}")
 
 set(SELF_EXE hello)
 set(SELF_SRCS hello.cpp compression.cpp)
@@ -581,6 +628,8 @@ cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
 
+...
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
@@ -687,6 +736,8 @@ Top-level build:
 cmake_minimum_required(VERSION 3.25)
 project(ex1 VERSION 1.0)
 enable_language(CXX)
+
+...
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
@@ -851,6 +902,8 @@ Top-level `CMakeLists.txt`:
 cmake_minimum_required(VERSION 3.25)
 project(ex8 VERSION 1.0)
 enable_language(CXX)
+
+...
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
