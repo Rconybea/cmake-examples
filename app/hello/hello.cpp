@@ -1,6 +1,6 @@
 // hello.cpp
 
-#include "compression.hpp"
+#include "compression/compression.hpp"
 
 #include <boost/program_options.hpp>
 #include <zlib.h>

@@ -1,6 +1,6 @@
 // myzip.cpp
 
-#include "compression.hpp"
+#include "compression/compression.hpp"
 
 #include <boost/program_options.hpp>
 #include <zlib.h>
@@ -57,12 +57,12 @@ main(int argc, char * argv[]) {
                     string fname_mz = fname;
                     string fname = fname_mz.substr(0, fname_mz.size() - sfx_z);
 
-                    compression::deflate_file(fname_mz, fname, keep_flag, verbose_flag);
+                    compression::inflate_file(fname_mz, fname, keep_flag, verbose_flag);
                 } else {
                     /* compress */
                     string fname_mz = fname + ".mz";
 
-                    compression::inflate_file(fname, fname_mz, keep_flag, verbose_flag);
+                    compression::deflate_file(fname, fname_mz, keep_flag, verbose_flag);
                 }
             }
         }
