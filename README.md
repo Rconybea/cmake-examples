@@ -37,14 +37,16 @@ and to provide an opinionated (though possibly flawed) version of best practice
 9.  ex9:  add c++ executable X2 (`myzip`) also using A1
 10. ex10: add c++ unit test + header-only library dep O3 (`catch2`)
 11. ex11: add bash unit test (for `myzip`)
+12. ex12: refactor: use inflate/deflate (streaming) api for non-native soluation
 
+12. ex12: c++ inflate/deflate streambuf implementation
 4. c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
 5. project-specific macros - simplify
 6. project-specific macros - support (monorepo, separable) builds from same tree
 7. c++ executable X + library A + library B.
 8. c++ executable X + library A + library B + library C, A -> B -> C, C header-only
-9. add unit tests + performance benchmarks.
+9. add performance benchmarks.
 10. add code coverage.
 
 ## Preliminaries
@@ -1665,4 +1667,1053 @@ drwxr-xr-x 2 roland roland 4096 Dec  8 15:57 CMakeFiles
 -rw-r--r-- 1 roland roland 1064 Dec  8 15:59 textfile
 -rw-r--r-- 1 roland roland 1087 Dec  8 15:59 textfile.mz
 -rw-r--r-- 1 roland roland 1064 Dec  8 15:59 textfile2
+```
+
+# Example 12
+
+Rework to use incremental compression api (inflate/deflate).
+This example is more "c++" than "cmake"
+
+```
+$ cd cmake-examples
+$ git checkout ex12
+```
+
+source tree:
+```
+$ tree
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       |-- myzip.cpp
+|       `-- utest
+|           |-- CMakeLists.txt
+|           |-- myzip.utest
+|           `-- textfile
+|-- compile_commands.json -> build/compile_commands.json
+`-- compression
+    |-- CMakeLists.txt
+    |-- compression.cpp
+    |-- deflate_zstream.cpp
+    |-- include
+    |   `-- compression
+    |       |-- base_zstream.hpp
+    |       |-- buffer.hpp
+    |       |-- buffered_deflate_zstream.hpp
+    |       |-- buffered_inflate_zstream.hpp
+    |       |-- compression.hpp
+    |       |-- deflate_zstream.hpp
+    |       |-- inflate_zstream.hpp
+    |       |-- span.hpp
+    |       `-- tostr.hpp
+    |-- inflate_zstream.cpp
+    `-- utest
+        |-- CMakeLists.txt
+        |-- compression.test.cpp
+        `-- compression_utest_main.cpp
+
+8 directories, 27 files
+```
+
+Changes:
+1. template `span`, to represent a memory range without ownership.
+2. template `buffer`, to represent a memory range with possible ownership.
+3. base class `base_zstream`, wrapper for `z_stream` struct from `zlib.h`.
+   `z_stream` supports incremental inflation/deflation (i.e. compress/decompress)
+4. class `inflate_zstream`, provides inflation using `z_stream`
+5. class `deflate_zstream`, provides deflation using `z_stream`
+6. add new source files to `compression/CMakeLists.txt`
+7. template `buffered_inflate_zstream`, attaches input+output buffers to `inflate_zstream`
+8. template `buffered_deflate_zstream`, attaches input+output buffers to `deflate_zstream`
+9. re-implement `compression::inflate_file` to use `buffered_inflate_zstream` and bounded memory.
+10. re-implement `compression::deflate_file` to use `buffered_deflate_zstream` and bounded memory.
+
+Details:
+1. template `span`:
+
+```
+// compression/span.hpp
+
+#pragma once
+
+#include <cstdint>
+
+/* A span of un-owned memory */
+template <typename CharT>
+class span {
+public:
+    using size_type = std::uint64_t;
+
+public:
+    span(CharT * lo, CharT * hi) : lo_{lo}, hi_{hi} {}
+
+    /* cast with different element type.  Note this may change .size */
+    template <typename OtherT>
+    span<OtherT>
+    cast() const { return span<OtherT>(reinterpret_cast<OtherT *>(lo_),
+                                       reinterpret_cast<OtherT *>(hi_)); }
+
+    span prefix(size_type z) const { return span(lo_, lo_ + z); }
+
+    bool empty() const { return lo_ == hi_; }
+    size_type size() const { return hi_ - lo_; }
+
+    CharT * lo() const { return lo_; }
+    CharT * hi() const { return hi_; }
+
+private:
+    CharT * lo_ = nullptr;
+    CharT * hi_ = nullptr;
+};
+```
+
+2. template `buffer`:
+
+```
+// buffer.hpp
+
+#pragma once
+
+#include "span.hpp"
+#include <utility>
+#include <cstdint>
+#include <cassert>
+
+/*
+ *  .buf
+ *
+ *    +------------------------------------------+
+ *    |  |  ...  |  | X|  ... | X|  |    ...  |  |
+ *    +------------------------------------------+
+ *     ^             ^            ^               ^
+ *     0             .lo          .hi             .buf_z
+ *
+ *
+ * buffer does not support wrapped content
+ */
+template <typename CharT>
+class buffer {
+public:
+    using span_type = span<CharT>;
+    using size_type = std::uint64_t;
+
+public:
+    buffer(size_type buf_z)
+        : is_owner_{true}, lo_pos_{0}, hi_pos_{0}, buf_{new CharT [buf_z]}, buf_z_{buf_z} {}
+    ~buffer() { this->clear(); }
+
+    CharT * buf() const { return buf_; }
+    size_type buf_z() const { return buf_z_; }
+    size_type lo_pos() const { return lo_pos_; }
+    size_type hi_pos() const { return hi_pos_; }
+
+    CharT const & operator[](size_type i) const { return buf_[i]; }
+
+    span_type contents() const { return span_type(buf_ + lo_pos_, buf_ + hi_pos_); }
+    span_type avail() const { return span_type(buf_ + hi_pos_, buf_ + buf_z_); }
+
+    bool empty() const { return lo_pos_ == hi_pos_; }
+
+    void produce(span_type const & span) {
+        assert(span.lo() == buf_ + hi_pos_);
+
+        hi_pos_ += span.size();
+    }
+
+    void consume(span_type const & span) {
+        if (span.size()) {
+            assert(span.lo() == buf_ + lo_pos_);
+
+            lo_pos_ += span.size();
+        } else {
+            /* since .consume() that arrives at empty contents also resets .lo_pos .hi_pos,
+             * we don't want to blow up when called with an empty span -- argument
+             * may represent some pre-reset location in buffer
+             */
+        }
+
+        if (lo_pos_ == hi_pos_) {
+            lo_pos_ = 0;
+            hi_pos_ = 0;
+        }
+    }
+
+    void setbuf(CharT * buf, size_type buf_z) {
+        /* properly reset any existing state */
+        this->clear();
+
+        is_owner_ = false;
+        lo_pos_ = 0;
+        hi_pos_ = 0;
+        buf_ = buf;
+        buf_z_ = buf_z;
+    }
+
+    void swap (buffer & x) {
+        std::swap(is_owner_, x.is_owner_);
+        std::swap(buf_, x.buf_);
+        std::swap(buf_z_, x.buf_z_);
+        std::swap(lo_pos_, x.lo_pos_);
+        std::swap(hi_pos_, x.hi_pos_);
+    }
+
+    void clear() {
+        if (is_owner_)
+            delete [] buf_;
+
+        is_owner_ = false;
+        buf_ = nullptr;
+        buf_z_ = 0;
+        lo_pos_ = 0;
+        hi_pos_ = 0;
+    }
+
+    /* move-assignment */
+    buffer & operator= (buffer && x) {
+        is_owner_ = x.is_owner_;
+        buf_ = x.buf_;
+        buf_z_ = x.buf_z_;
+        lo_pos_ = x.lo_pos_;
+        hi_pos_ = x.hi_pos_;
+
+        x.is_owner_ = false;
+        x.lo_pos_ = 0;
+        x.hi_pos_ = 0;
+        x.buf_ = nullptr;
+        x.buf_z_ = 0;
+
+        return *this;
+    }
+
+private:
+    bool is_owner_ = false;
+    CharT * buf_ = nullptr;
+    size_type buf_z_ = 0;
+
+    /* buffer locations [.lo_pos .. .hi_pos) are occupied;
+     * remainder is available space
+     */
+    size_type lo_pos_ = 0;
+    size_type hi_pos_ = 0;
+};
+
+namespace std {
+    template <typename CharT>
+    inline void
+    swap(buffer<CharT> & lhs, buffer<CharT> & rhs) {
+        lhs.swap(rhs);
+    }
+}
+```
+
+3. class `base_zstream`:
+```
+// base_zstream.hpp
+
+#pragma once
+
+#include "span.hpp"
+#include <zlib.h>
+#include <ios>
+#include <utility>
+#include <cstring>
+
+class base_zstream {
+public:
+    using span_type = span<std::uint8_t>;
+
+public:
+    bool input_empty() const { return (zstream_.avail_in == 0); }
+    bool have_input() const { return (zstream_.avail_in > 0); }
+    bool output_empty() const { return (zstream_.avail_out == 0); }
+
+    std::uint64_t n_in_total() const { return zstream_.total_in; }
+    std::uint64_t n_out_total() const { return zstream_.total_out; }
+
+    /* Require: .input_empty() */
+    void provide_input(std::uint8_t * buf, std::streamsize buf_z) {
+        if (! this->input_empty())
+            throw std::runtime_error("base_zstream::provide_input: prior input work not complete");
+
+        zstream_.next_in = buf;
+        zstream_.avail_in = buf_z;
+    }
+
+    void provide_input(span_type const & span) {
+        this->provide_input(span.lo(), span.size());
+    }
+
+    void provide_output(uint8_t * buf, std::streamsize buf_z) {
+        zstream_.next_out = buf;
+        zstream_.avail_out = buf_z;
+    }
+
+    void provide_output(span_type const & span) {
+        this->provide_output(span.lo(), span.size());
+    }
+
+protected:
+    void swap(base_zstream & x) {
+        std::swap(zstream_, x.zstream_);
+    }
+
+    /* move-assignment */
+    base_zstream & operator= (base_zstream && x) {
+        zstream_ = x.zstream_;
+
+        /* zero rhs to prevent ::inflateEnd() releasing memory in x dtor */
+        ::memset(&x.zstream_, 0, sizeof(x.zstream_));
+
+        return *this;
+    }
+
+protected:
+    /* zlib control state.  contains heap-allocated memory */
+    z_stream zstream_;
+};
+```
+
+4. class `inflate_zstream`
+
+```
+// inflate_zstream.hpp
+
+#pragma once
+
+#include "base_zstream.hpp"
+#include "buffer.hpp"
+#include <ios>
+#include <cstring>
+
+class inflate_zstream : public base_zstream {
+public:
+    using span_type = span<std::uint8_t>;
+
+public:
+    inflate_zstream();
+    ~inflate_zstream();
+
+    /* decompress some input,  return #of uncompressed bytes obtained */
+    std::streamsize inflate_chunk();
+
+    /* .first  = span for compressed bytes consumed
+     * .second = span for uncompressed bytes produced
+     */
+    std::pair<span_type, span_type> inflate_chunk2();
+
+    void swap (inflate_zstream & x) {
+        base_zstream::swap(x);
+    }
+
+    /* move-assignment */
+    inflate_zstream & operator= (inflate_zstream && x) {
+        base_zstream::operator=(std::move(x));
+        return *this;
+    }
+};
+
+namespace std {
+    inline void
+    swap(inflate_zstream & lhs, inflate_zstream & rhs) {
+        lhs.swap(rhs);
+    }
+}
+```
+
+```
+// inflate_zstream.cpp
+
+#include "compression/inflate_zstream.hpp"
+#include "compression/tostr.hpp"
+
+using namespace std;
+
+inflate_zstream::inflate_zstream() {
+    zstream_.zalloc    = Z_NULL;
+    zstream_.zfree     = Z_NULL;
+    zstream_.opaque    = Z_NULL;
+    zstream_.avail_in  = 0;
+    zstream_.next_in   = Z_NULL;
+    zstream_.avail_out = 0;
+    zstream_.next_out  = Z_NULL;
+
+    int ret = ::inflateInit(&zstream_);
+
+    if (ret != Z_OK)
+        throw std::runtime_error("inflate_zstream: failed to initialize .zstream");
+}
+
+inflate_zstream::~inflate_zstream() {
+    ::inflateEnd(&zstream_);
+}
+
+std::streamsize
+inflate_zstream::inflate_chunk() {
+    return this->inflate_chunk2().second.size();
+}
+
+std::pair<span<std::uint8_t>, span<std::uint8_t>>
+inflate_zstream::inflate_chunk2() {
+    /* Z = compressed data
+     * U = uncompressed   data
+     *
+     *                          (pre) zstream
+     *         /--------------    .next_in
+     *         |                  .next_out    -----------\
+     *         |                                          |
+     *         |                                          |
+     *         v    (pre)                                 v    (pre)
+     *              zstream                                    zstream
+     *         <--  .avail_in ----------->                <--  .avail_out ------------------>
+     *
+     * input:  ZZZZZZZZZZZZZZZZZZZZZZZZZZZ       output:  UUUUUUUUUUUUU......................
+     *         ^        ^                                 ^            ^
+     *         uc_pre   uc_post                           z_pre        z_post
+     *
+     *                  <--- (post)  ---->                             <--- (post)   ------->
+     *                       zstream                                        zstream
+     *                  ^    .avail_in                                 ^    .avail_in
+     *                  |                                              |
+     *                  |       (post) zstream                         |
+     *                  \------   .next_in                             |
+     *                            .next_out ---------------------------/
+     *
+     *         < retval >                                 <  retval    >
+     *         < .first >                                 <  .second   >
+     *
+     */
+
+    uint8_t * z_pre = zstream_.next_in;
+    uint8_t * uc_pre = zstream_.next_out;
+
+    int err = ::inflate(&zstream_, Z_NO_FLUSH);
+
+    switch(err) {
+    case Z_NEED_DICT:
+        err = Z_DATA_ERROR;
+        /* fallthru */
+    case Z_DATA_ERROR:
+    case Z_MEM_ERROR:
+        throw std::runtime_error(tostr("zstreambuf::inflate_chunk: error [", err, "] from zlib inflate"));
+    }
+
+    uint8_t * z_post = zstream_.next_in;
+    uint8_t * uc_post = zstream_.next_out;
+
+    return pair<span_type, span_type>(span_type(z_pre, z_post),
+                                      span_type(uc_pre, uc_post));
+} /*inflate_chunk2*/
+```
+
+5. class `deflate_zstream`
+
+```
+// deflate_zstream.hpp
+
+#pragma once
+
+#include "base_zstream.hpp"
+#include "buffer.hpp"
+#include <zlib.h>
+#include <ios>
+#include <cstring>
+
+class deflate_zstream : public base_zstream {
+public:
+    using span_type = span<std::uint8_t>;
+
+public:
+    deflate_zstream();
+    ~deflate_zstream();
+
+    /* compress some output,  return #of compressed bytes obtained
+     *
+     * final_flag.  must set to true end of uncompressed input reached,
+     *              so that .zstream knows to flush compressed state
+     */
+    std::streamsize deflate_chunk(bool final_flag);
+
+    /* .first = span for uncompressed bytes consumed
+     * .second = span for compressed bytes produced
+     */
+    std::pair<span_type, span_type> deflate_chunk2(bool final_flag);
+
+    void swap(deflate_zstream & x) {
+        base_zstream::swap(x);
+    }
+
+    /* move-assignment */
+    deflate_zstream & operator= (deflate_zstream && x) {
+        base_zstream::operator=(std::move(x));
+        return *this;
+    }
+};
+
+namespace std {
+    inline void
+    swap(deflate_zstream & lhs, deflate_zstream & rhs) {
+        lhs.swap(rhs);
+    }
+}
+```
+
+```
+// deflate_zstream.cpp
+
+#include "compression/deflate_zstream.hpp"
+
+using namespace std;
+
+deflate_zstream::deflate_zstream()
+{
+    zstream_.zalloc    = Z_NULL;
+    zstream_.zfree     = Z_NULL;
+    zstream_.opaque    = Z_NULL;
+    zstream_.avail_in  = 0;
+    zstream_.next_in   = Z_NULL;
+    zstream_.avail_out = 0;
+    zstream_.next_out  = Z_NULL;
+
+    int ret = ::deflateInit(&zstream_, Z_DEFAULT_COMPRESSION);
+
+    if (ret != Z_OK)
+        throw runtime_error("deflate_zstream: failed to initialize .zstream");
+}
+
+deflate_zstream::~deflate_zstream() {
+    ::deflateEnd(&zstream_);
+}
+
+streamsize
+deflate_zstream::deflate_chunk(bool final_flag) {
+    return this->deflate_chunk2(final_flag).second.size();
+} /*deflate_chunk*/
+
+pair<span<uint8_t>, span<uint8_t>>
+deflate_zstream::deflate_chunk2(bool final_flag) {
+    /* U = uncompressed data
+     * Z = compressed   data
+     *
+     *                          (pre) zstream
+     *         /--------------    .next_in
+     *         |                  .next_out    -----------\
+     *         |                                          |
+     *         |                                          |
+     *         v    (pre)                                 v    (pre)
+     *              zstream                                    zstream
+     *         <--  .avail_in ----------->                <--  .avail_out ------------------>
+     *
+     * input:  UUUUUUUUUUUUUUUUUUUUUUUUUUU       output:  ZZZZZZZZZZZZZ......................
+     *         ^        ^                                 ^            ^
+     *         uc_pre   uc_post                           z_pre        z_post
+     *
+     *                  <--- (post)  ---->                             <--- (post)   ------->
+     *                       zstream                                        zstream
+     *                  ^    .avail_in                                 ^    .avail_in
+     *                  |                                              |
+     *                  |       (post) zstream                         |
+     *                  \------   .next_in                             |
+     *                            .next_out ---------------------------/
+     *
+     *         < retval >                                 <  retval    >
+     *         < .first >                                 <  .second   >
+     *
+     */
+
+    uint8_t * uc_pre = zstream_.next_in;
+    uint8_t * z_pre = zstream_.next_out;
+
+    int err = ::deflate(&zstream_,
+                        (final_flag ? Z_FINISH : 0) /*flush*/);
+
+    if (err == Z_STREAM_ERROR)
+        throw runtime_error("basic_zstreambuf::sync: impossible zlib deflate returned Z_STREAM_ERROR");
+
+    uint8_t * uc_post = zstream_.next_in;
+    uint8_t * z_post = zstream_.next_out;
+
+    return pair<span_type, span_type>(span_type(uc_pre, uc_post),
+                                      span_type(z_pre, z_post));
+}
+```
+
+6. in `compression/CMakeLists.txt`:
+```
+set(SELF_SRCS compression.cpp inflate_zstream.cpp deflate_zstream.cpp buffered_inflate_zstream.cpp buffered_deflate_zstream.cpp)
+...
+```
+
+7. class `buffered_inflate_zstream`:
+
+.hpp
+```
+// buffered_inflate_zstream.hpp
+
+#include "inflate_zstream.hpp"
+
+/* Example
+ *
+ *   ifstream zfs("path/to/compressedfile.z", ios::binary);
+ *   buffered_inflate_zstream<char> zs;
+ *   ofstream ucfs("path/to/uncompressedfile");
+ *
+ *   while (!zfs.eof()) {
+ *       span<char> z_span = zs.z_avail();
+ *       if (!zfs.read(z_span.lo(), z_span.size())) {
+ *            error...
+ *       }
+ *       zs.z_produce(z_span.prefix(zfs.gcount()));
+ *
+ *       zs.inflate_chunk();
+ *
+ *       span<char> uc_span = zs.uc_contents();
+ *       ucfs.write(uc_span.lo(), uc_span.size());
+ *
+ *       zs.uc_consume(uc_span);
+ *   }
+ */
+class buffered_inflate_zstream {
+public:
+    using z_span_type = span<std::uint8_t>;
+    using size_type = std::uint64_t;
+
+public:
+    buffered_inflate_zstream(size_type buf_z = 64UL * 1024UL)
+        : z_in_buf_{buf_z},
+          uc_out_buf_{buf_z}
+        {
+            zs_algo_.provide_output(uc_out_buf_.avail());
+        }
+
+    std::uint64_t n_in_total() const { return zs_algo_.n_in_total(); }
+    std::uint64_t n_out_total() const { return zs_algo_.n_out_total(); }
+
+    /* space available for more compressed input */
+    z_span_type z_avail() const { return z_in_buf_.avail(); }
+    /* space available for more uncompressed input (output of this object) */
+    z_span_type uc_avail() const { return uc_out_buf_.avail(); }
+    /* uncompressed content available */
+    z_span_type uc_contents() const { return uc_out_buf_.contents(); }
+
+    /* after populating some prefix of .z_avail(), make existence of that input known
+     * so that it can be uncompressed
+     */
+    void z_produce(z_span_type const & span) {
+        if (span.size()) {
+            z_in_buf_.produce(span);
+
+            /* note whenever we call .inflate,  we consume from .z_in_buf,
+             * so .z_in_buf and .input_zs are kept synchronized
+             */
+            zs_algo_.provide_input(z_in_buf_.contents());
+        }
+    }
+
+    /* consume some uncompressed input -- allows that buffer space to be reused */
+    void uc_consume(z_span_type const & span) {
+        if (span.size()) {
+            uc_out_buf_.consume(span);
+        }
+
+        if (uc_out_buf_.empty()) {
+            /* can recycle output */
+            zs_algo_.provide_output(uc_out_buf_.avail());
+        }
+    }
+
+    void uc_consume_all() { this->uc_consume(this->uc_contents()); }
+
+    size_type inflate_chunk();
+
+    void swap (buffered_inflate_zstream & x) {
+        std::swap(z_in_buf_, x.z_in_buf_);
+        std::swap(zs_algo_, x.zs_algo_);
+        std::swap(uc_out_buf_, x.uc_out_buf_);
+    }
+
+    buffered_inflate_zstream & operator= (buffered_inflate_zstream && x) {
+        z_in_buf_ = std::move(x.z_in_buf_);
+        zs_algo_ = std::move(x.zs_algo_);
+        uc_out_buf_ = std::move(x.uc_out_buf_);
+
+        return *this;
+    }
+
+private:
+    /* compressed input */
+    buffer<std::uint8_t> z_in_buf_;
+
+    /* inflation-state (holds zlib z_stream) */
+    inflate_zstream zs_algo_;
+
+    /* uncompressed input */
+    buffer<std::uint8_t> uc_out_buf_;
+};
+
+namespace std {
+    inline void
+    swap(buffered_inflate_zstream & lhs,
+         buffered_inflate_zstream & rhs)
+    {
+        lhs.swap(rhs);
+    }
+}
+```
+
+.cpp
+```
+// buffered_inflate_zstream.cpp
+
+#include "compression/buffered_inflate_zstream.hpp"
+
+using namespace std;
+
+auto
+buffered_inflate_zstream::inflate_chunk() -> size_type
+{
+    if (zs_algo_.have_input()) {
+        std::pair<z_span_type, z_span_type> x = zs_algo_.inflate_chunk2();
+
+        z_in_buf_.consume(x.first);
+        uc_out_buf_.produce(x.second);
+
+        return x.second.size();
+    } else {
+        return 0;
+    }
+}
+```
+
+8. class `buffered_deflate_zstream`:
+
+.hpp:
+```
+// buffered_deflate_zstream.hpp
+
+#include "deflate_zstream.hpp"
+
+/* accept input (of type CharT) and compress (aka deflatee).
+ * provides buffer for both uncompressed input and compressed output
+ *
+ * Example
+ *
+ *   ifstream ucfs("path/to/uncompressedfile");
+ *   buffered_deflate_zstream<char> zs;
+ *   ofstream zfs("path/to/compressedfile.z", ios::binary);
+ *
+ *   if (!ucfs)
+ *       error...
+ *   if (!zfs)
+ *       error...
+ *
+ *   for (bool progress = true, final_flag = false; progress;) {
+ *       streamsize nread = 0;
+ *
+ *       if (ucfs.eof()) {
+ *           final = true;
+ *       } else {
+ *           span<char> uc_span = zs.uc_avail();
+ *           ucfs.read(uc_span.lo(), uc_span.size());
+ *           nread = ucfs.gcount();
+ *           zs.uc_produce(uc_span.prefix(nread));
+ *       }
+ *
+ *       zs.deflate_chunk(final);
+ *
+ *       span<uint8_t> z_span = zs.z_contents();
+ *       zfs.write(z_span.lo(), z_span.size());
+ *       zs.z_consume(z_span);
+ *
+ *       progress = (nread > 0) || (z_span.size() > 0);
+ *   }
+ */
+class buffered_deflate_zstream {
+public:
+    using z_span_type = span<std::uint8_t>;
+    using size_type = std::uint64_t;
+
+public:
+    buffered_deflate_zstream(size_type buf_z = 64 * 1024)
+        : uc_in_buf_{buf_z},
+          z_out_buf_{buf_z}
+        {
+            zs_algo_.provide_output(z_out_buf_.avail());
+        }
+
+    size_type n_in_total() const { return zs_algo_.n_in_total(); }
+    size_type n_out_total() const { return zs_algo_.n_out_total(); }
+
+    /* space available for more uncompressed output (input of this object) */
+    z_span_type uc_avail() const { return uc_in_buf_.avail(); }
+    /* spaec available for more compressed output */
+    z_span_type z_avail() const { return z_out_buf_.avail(); }
+    /* compressed content available */
+    z_span_type z_contents() const { return z_out_buf_.contents(); }
+
+    /* after populating some prefix of .uc_avail(),  make existence of that output
+     * known to .output_zs so it can be compressed
+     */
+    void uc_produce(z_span_type const & span) {
+        if (span.size()) {
+            uc_in_buf_.produce(span);
+
+            /* note whenever we call .deflate,  we consume from .uc_output_buf,
+             * so .uc_output_buf and .output_zs are kept synchronized
+             */
+            zs_algo_.provide_input(uc_in_buf_.contents());
+        }
+    }
+
+    /* recognize some consumed compressed output -- allows that buffer space to be reused */
+    void z_consume(z_span_type const & span) {
+        if (span.size()) {
+            z_out_buf_.consume(span);
+        }
+
+        if (z_out_buf_.empty()) {
+            /* can recycle output */
+            zs_algo_.provide_output(z_out_buf_.avail());
+        }
+    }
+
+    void z_consume_all() { this->z_consume(this->z_contents()); }
+
+    /* return #of bytes compressed output available */
+    size_type deflate_chunk(bool final_flag);
+
+    void swap (buffered_deflate_zstream & x) {
+        std::swap(uc_in_buf_, x.uc_in_buf_);
+        std::swap(zs_algo_, x.zs_algo_);
+        std::swap(z_out_buf_, x.z_out_buf_);
+    }
+
+    buffered_deflate_zstream & operator= (buffered_deflate_zstream && x) {
+        uc_in_buf_ = std::move(x.uc_in_buf_);
+        zs_algo_ = std::move(x.zs_algo_);
+        z_out_buf_ = std::move(x.z_out_buf_);
+
+        return *this;
+    }
+
+private:
+    /* uncompressed output */
+    buffer<std::uint8_t> uc_in_buf_;
+
+    /* deflate-state (holds zlib z_stream) */
+    deflate_zstream zs_algo_;
+
+    /* compressed output */
+    buffer<std::uint8_t> z_out_buf_;
+}; /*buffered_deflate_zstream*/
+
+namespace std {
+    inline void
+    swap(buffered_deflate_zstream & lhs,
+         buffered_deflate_zstream & rhs)
+    {
+        lhs.swap(rhs);
+    }
+}
+```
+
+.cpp:
+```
+// buffered_deflate_zstream.cpp
+
+#include "compression/buffered_deflate_zstream.hpp"
+
+using namespace std;
+
+auto
+buffered_deflate_zstream::deflate_chunk(bool final_flag) -> size_type
+{
+    if (zs_algo_.have_input() || final_flag) {
+        std::pair<z_span_type, z_span_type> x = zs_algo_.deflate_chunk2(final_flag);
+
+        uc_in_buf_.consume(x.first);
+        z_out_buf_.produce(x.second);
+
+        return x.second.size();
+    } else {
+        return 0;
+    }
+}
+```
+
+9. Reimplement `compression::inflate_file`
+
+```
+// compression.cpp
+
+...
+
+void
+compression::inflate_file(std::string const & in_file,
+                          std::string const & out_file,
+                          bool keep_flag,
+                          bool verbose_flag)
+{
+    /* check output doesn't exist already */
+    if (ifstream(out_file, ios::binary|ios::in))
+        throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
+
+    if (verbose_flag)
+        cerr << "compression::inflate_file will uncompress [" << in_file << "] -> [" << out_file << "]" << endl;
+
+    /* open target file */
+    ifstream fs(in_file, ios::binary);
+    if (!fs)
+        throw std::runtime_error("unable to open input file");
+
+    buffered_inflate_zstream zstate;
+
+    /* write uncompressed output */
+    ofstream ucfs(out_file, ios::out|ios::binary);
+
+    while (!fs.eof()) {
+        span<uint8_t> zspan = zstate.z_avail();
+
+        fs.read(reinterpret_cast<char *>(zspan.lo()), zspan.size());
+        std::streamsize n_read = fs.gcount();
+
+        if (n_read == 0)
+            throw std::runtime_error(tostr("inflate_file: unable to read contents of input file [", in_file, "]"));
+
+        zstate.z_produce(zspan.prefix(n_read));
+
+        /* uncompress some text */
+        zstate.inflate_chunk();
+
+        span<uint8_t> ucspan = zstate.uc_contents();
+
+        ucfs.write(reinterpret_cast<char *>(ucspan.lo()), ucspan.size());
+
+        zstate.uc_consume(ucspan);
+    }
+
+    if (!ucfs.good())
+        throw std::runtime_error(tostr("inflate_file: failed to write ", zstate.n_out_total(), " bytes to [", out_file, "]"));
+
+    fs.close();
+    ucfs.close();
+
+    if (!keep_flag)
+        remove(in_file.c_str());
+} /*inflate_file*/
+```
+
+10. re-implement `compression::deflate_file`
+```
+// compression.cpp
+
+...
+
+void
+compression::deflate_file(std::string const & in_file,
+                          std::string const & out_file,
+                          bool keep_flag,
+                          bool verbose_flag)
+{
+    /* check output doesn't exist already */
+    if (ifstream(out_file, ios::binary|ios::in))
+        throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
+
+    if (verbose_flag || true)
+        cerr << "compress::deflate_file: will compress [" << in_file << "]"
+             << " -> [" << out_file << "]" << endl;
+
+    /* open target file -- binary mode since need not be text */
+    ifstream fs(in_file, ios::in|ios::binary);
+    if (!fs)
+        throw std::runtime_error(tostr("unable to open input file [", in_file, "]"));
+
+    buffered_deflate_zstream zstate;
+
+    /* write compressed output */
+    ofstream zfs(out_file, ios::out|ios::binary);
+
+    for (bool progress = true, final_flag = false; progress;) {
+        streamsize nread = 0;
+
+        if (fs.eof()) {
+            final_flag = true;
+        } else {
+            span<uint8_t> ucspan = zstate.uc_avail();
+
+            fs.read(reinterpret_cast<char *>(ucspan.lo()), ucspan.size());
+            nread = fs.gcount();
+            zstate.uc_produce(ucspan.prefix(nread));
+        }
+
+        zstate.deflate_chunk(final_flag);
+
+        /* write compressed output */
+        span<uint8_t> zspan = zstate.z_contents();
+
+        zfs.write(reinterpret_cast<char *>(zspan.lo()), zspan.size());
+        if (!zfs.good())
+            throw std::runtime_error(tostr("failed to write ", zspan.size(), " bytes"
+                                           , " to [", out_file, "]"));
+
+        zstate.z_consume(zspan);
+
+        progress = (nread > 0) || (zspan.size() > 0);
+    }
+
+    fs.close();
+    zfs.close();
+
+    /* control here only if successfully wrote uncompressed output */
+    if (!keep_flag)
+        remove(in_file.c_str());
+} /*deflate_file*/
+```
+
+Build:
+```
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+...
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[  7%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 15%] Building CXX object compression/CMakeFiles/compression.dir/inflate_zstream.cpp.o
+[ 23%] Building CXX object compression/CMakeFiles/compression.dir/deflate_zstream.cpp.o
+[ 30%] Building CXX object compression/CMakeFiles/compression.dir/buffered_inflate_zstream.cpp.o
+[ 38%] Building CXX object compression/CMakeFiles/compression.dir/buffered_deflate_zstream.cpp.o
+[ 46%] Linking CXX shared library libcompression.so
+[ 46%] Built target compression
+[ 53%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression_utest_main.cpp.o
+[ 61%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression.test.cpp.o
+[ 69%] Linking CXX executable utest.compression
+[ 69%] Built target utest.compression
+[ 76%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 84%] Linking CXX executable hello
+[ 84%] Built target hello
+[ 92%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+```
+
+Run unit tests:
+```
+$ (cd build && ctest)
+Test project /home/roland/proj/cmake-examples/build
+    Start 1: utest.compression
+1/2 Test #1: utest.compression ................   Passed    0.00 sec
+    Start 2: myzip.utest
+2/2 Test #2: myzip.utest ......................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.02 sec
 ```
