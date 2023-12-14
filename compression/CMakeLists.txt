@@ -1,5 +1,5 @@
 set(SELF_LIB compression)
-set(SELF_SRCS compression.cpp)
+set(SELF_SRCS compression.cpp inflate_zstream.cpp deflate_zstream.cpp)
 set(SELF_VERSION 2)
 set(SELF_SOVERSION 2.3)
 
@@ -7,7 +7,7 @@ add_library(${SELF_LIB} SHARED ${SELF_SRCS})
 set_target_properties(${SELF_LIB} PROPERTIES VERSION ${SELF_VERSION} SOVERSION ${SELF_SOVERSION})
 target_include_directories(${SELF_LIB} PUBLIC
     $<INSTALL_INTERFACE:include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/compression>)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
 target_compile_options(${SELF_LIB} PRIVATE ${zlib_CFLAGS_OTHER})
 target_include_directories(${SELF_LIB} PRIVATE ${zlib_INCLUDE_DIRS})

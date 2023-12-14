@@ -1,5 +1,5 @@
-#include "compression.hpp"
-#include "tostr.hpp"
+#include "compression/compression.hpp"
+#include "compression/tostr.hpp"
 #include <catch2/catch.hpp>
 #include <vector>
 #include <string>

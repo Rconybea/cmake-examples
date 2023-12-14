@@ -1,7 +1,9 @@
 // compression.cpp
 
-#include "compression.hpp"
-#include "tostr.hpp"
+#include "compression/compression.hpp"
+#include "compression/buffered_inflate_zstream.hpp"
+#include "compression/buffered_deflate_zstream.hpp"
+#include "compression/tostr.hpp"
 #include <zlib.h>
 #include <iostream>
 #include <fstream>
@@ -63,6 +65,66 @@ compression::deflate(std::vector<uint8_t> const & og_data_v)
 } /*deflate*/
 
 void
+compression::deflate_file(std::string const & in_file,
+                          std::string const & out_file,
+                          bool keep_flag,
+                          bool verbose_flag)
+{
+    /* check output doesn't exist already */
+    if (ifstream(out_file, ios::binary|ios::in))
+        throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
+
+    if (verbose_flag || true)
+        cerr << "compress::deflate_file: will compress [" << in_file << "]"
+             << " -> [" << out_file << "]" << endl;
+
+    /* open target file -- binary mode since need not be text */
+    ifstream fs(in_file, ios::in|ios::binary);
+    if (!fs)
+        throw std::runtime_error(tostr("unable to open input file [", in_file, "]"));
+
+    buffered_deflate_zstream<uint8_t> zstate;
+
+    /* write compressed output */
+    ofstream zfs(out_file, ios::out|ios::binary);
+
+    for (bool progress = true, final_flag = false; progress;) {
+        streamsize nread = 0;
+
+        if (fs.eof()) {
+            final_flag = true;
+        } else {
+            span<uint8_t> ucspan = zstate.uc_avail();
+
+            fs.read(reinterpret_cast<char *>(ucspan.lo()), ucspan.size());
+            nread = fs.gcount();
+            zstate.uc_produce(ucspan.prefix(nread));
+        }
+
+        zstate.deflate_chunk(final_flag);
+
+        /* write compressed output */
+        span<uint8_t> zspan = zstate.z_contents();
+
+        zfs.write(reinterpret_cast<char *>(zspan.lo()), zspan.size());
+        if (!zfs.good())
+            throw std::runtime_error(tostr("failed to write ", zspan.size(), " bytes"
+                                           , " to [", out_file, "]"));
+
+        zstate.z_consume(zspan);
+
+        progress = (nread > 0) || (zspan.size() > 0);
+    }
+
+    fs.close();
+    zfs.close();
+
+    /* control here only if successfully wrote uncompressed output */
+    if (!keep_flag)
+        remove(in_file.c_str());
+} /*deflate_file*/
+
+void
 compression::inflate_file(std::string const & in_file,
                           std::string const & out_file,
                           bool keep_flag,
@@ -73,77 +135,45 @@ compression::inflate_file(std::string const & in_file,
         throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
 
     if (verbose_flag)
-        cerr << "compress::inflate_file: will compress [" << in_file << "] -> [" << out_file << "]" << endl;
+        cerr << "compression::inflate_file will uncompress [" << in_file << "] -> [" << out_file << "]" << endl;
 
-    /* open target file (start at end) */
-    ifstream fs(in_file, ios::binary|ios::ate);
-    if (!fs)
-        throw std::runtime_error(tostr("unable to open input file [", in_file, "]"));
-
-    auto z = fs.tellg();
-
-    /* read file content into memory */
-    if (verbose_flag)
-        cerr << "compress::inflate_file: read " << z << " bytes from [" << in_file << "] into memory" << endl;
-
-    vector<uint8_t> fs_data_v(z);
-    fs.seekg(0);
-    if (!fs.read(reinterpret_cast<char *>(&fs_data_v[0]), z))
-        throw std::runtime_error(tostr("unable to read contents of input file [", in_file, "]"));
-
-    vector<uint8_t> z_data_v = compression::deflate(fs_data_v);
-
-    /* write compresseed output */
-    ofstream zfs(out_file, ios::out|ios::binary);
-    zfs.write(reinterpret_cast<char *>(&(z_data_v[0])), z_data_v.size());
-
-    if (!zfs.good())
-        throw std::runtime_error(tostr("failed to write ", z_data_v.size(), " bytes to [", out_file, "]"));
-
-    /* control here only if successfully wrote uncompressed output */
-    if (!keep_flag)
-        remove(in_file.c_str());
-} /*inflate_file*/
-
-void
-compression::deflate_file(std::string const & in_file,
-                          std::string const & out_file,
-                          bool keep_flag,
-                          bool verbose_flag)
-{
-    /* check output doesn't exist already */
-    if (ifstream(out_file, ios::binary|ios::in))
-        throw std::runtime_error(tostr("output file [", out_file, "] already exists"));
-
-    if (verbose_flag)
-        cerr << "compression::deflate_file will uncompress [" << in_file << "] -> [" << out_file << "]" << endl;
-
-    /* open target file (start at end) */
-    ifstream fs(in_file, ios::binary|ios::ate);
+    /* open target file */
+    ifstream fs(in_file, ios::binary);
     if (!fs)
         throw std::runtime_error("unable to open input file");
 
-    auto z = fs.tellg();
-
-    /* read file contents into memory */
-    if (verbose_flag)
-        cerr << "compression::deflate_file: read " << z << " bytes from [" << in_file << "] into memory" << endl;
-
-    vector<uint8_t> fs_data_v(z);
-    fs.seekg(0);
-    if (!fs.read(reinterpret_cast<char *>(&fs_data_v[0]), z))
-        throw std::runtime_error(tostr("unable to read contents of input file [", in_file, "]"));
-
-    /* uncompress */
-    vector<uint8_t> og_data_v = compression::inflate(fs_data_v, 999999);
+    buffered_inflate_zstream<uint8_t> zstate;
 
     /* write uncompressed output */
-    ofstream ogfs(out_file, ios::out|ios::binary);
-    ogfs.write(reinterpret_cast<char *>(&(og_data_v[0])), og_data_v.size());
+    ofstream ucfs(out_file, ios::out|ios::binary);
 
-    if (!ogfs.good())
-        throw std::runtime_error(tostr("failed to write ", og_data_v.size(), " bytes to [", out_file, "]"));
+    while (!fs.eof()) {
+        span<uint8_t> zspan = zstate.z_avail();
+
+        fs.read(reinterpret_cast<char *>(zspan.lo()), zspan.size());
+        std::streamsize n_read = fs.gcount();
+
+        if (n_read == 0)
+            throw std::runtime_error(tostr("inflate_file: unable to read contents of input file [", in_file, "]"));
+
+        zstate.z_produce(zspan.prefix(n_read));
+
+        /* uncompress some text */
+        zstate.inflate_chunk();
+
+        span<uint8_t> ucspan = zstate.uc_contents();
+
+        ucfs.write(reinterpret_cast<char *>(ucspan.lo()), ucspan.size());
+
+        zstate.uc_consume(ucspan);
+    }
+
+    if (!ucfs.good())
+        throw std::runtime_error(tostr("inflate_file: failed to write ", zstate.n_out_total(), " bytes to [", out_file, "]"));
+
+    fs.close();
+    ucfs.close();
 
     if (!keep_flag)
         remove(in_file.c_str());
-} /*deflate_file*/
+} /*inflate_file*/
