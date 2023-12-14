@@ -27,7 +27,10 @@ public:
 
 public:
     buffer(size_type buf_z)
-        : is_owner_{true}, lo_pos_{0}, hi_pos_{0}, buf_{new CharT [buf_z]}, buf_z_{buf_z} {}
+        : is_owner_{true},
+          lo_pos_{0}, hi_pos_{0},
+          buf_{new CharT [buf_z]},
+          buf_z_{buf_z} {}
     ~buffer() { this->clear(); }
 
     CharT * buf() const { return buf_; }

@@ -83,7 +83,7 @@ compression::deflate_file(std::string const & in_file,
     if (!fs)
         throw std::runtime_error(tostr("unable to open input file [", in_file, "]"));
 
-    buffered_deflate_zstream<uint8_t> zstate;
+    buffered_deflate_zstream zstate;
 
     /* write compressed output */
     ofstream zfs(out_file, ios::out|ios::binary);
@@ -142,7 +142,7 @@ compression::inflate_file(std::string const & in_file,
     if (!fs)
         throw std::runtime_error("unable to open input file");
 
-    buffered_inflate_zstream<uint8_t> zstate;
+    buffered_inflate_zstream zstate;
 
     /* write uncompressed output */
     ofstream ucfs(out_file, ios::out|ios::binary);

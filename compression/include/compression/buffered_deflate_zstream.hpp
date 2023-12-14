@@ -37,10 +37,8 @@
  *       progress = (nread > 0) || (z_span.size() > 0);
  *   }
  */
-template <typename CharT>
 class buffered_deflate_zstream {
 public:
-    using uc_span_type = span<CharT>;
     using z_span_type = span<std::uint8_t>;
     using size_type = std::uint64_t;
 
@@ -56,7 +54,7 @@ public:
     size_type n_out_total() const { return zs_algo_.n_out_total(); }
 
     /* space available for more uncompressed output (input of this object) */
-    uc_span_type uc_avail() const { return uc_in_buf_.avail(); }
+    z_span_type uc_avail() const { return uc_in_buf_.avail(); }
     /* spaec available for more compressed output */
     z_span_type z_avail() const { return z_out_buf_.avail(); }
     /* compressed content available */
@@ -65,14 +63,14 @@ public:
     /* after populating some prefix of .uc_avail(),  make existence of that output
      * known to .output_zs so it can be compressed
      */
-    void uc_produce(uc_span_type const & span) {
+    void uc_produce(z_span_type const & span) {
         if (span.size()) {
             uc_in_buf_.produce(span);
 
             /* note whenever we call .deflate,  we consume from .uc_output_buf,
              * so .uc_output_buf and .output_zs are kept synchronized
              */
-            zs_algo_.provide_input(uc_in_buf_.contents().template cast<std::uint8_t>());
+            zs_algo_.provide_input(uc_in_buf_.contents());
         }
     }
 
@@ -91,19 +89,7 @@ public:
     void z_consume_all() { this->z_consume(this->z_contents()); }
 
     /* return #of bytes compressed output available */
-    size_type deflate_chunk(bool final_flag) {
-        if (zs_algo_.have_input() || final_flag) {
-            std::pair<z_span_type, z_span_type> x = zs_algo_.deflate_chunk2(final_flag);
-
-            uc_in_buf_.consume(x.first.template cast<CharT>());
-
-            z_out_buf_.produce(x.second);
-
-            return x.second.size();
-        } else {
-            return 0;
-        }
-    }
+    size_type deflate_chunk(bool final_flag);
 
     void swap (buffered_deflate_zstream & x) {
         std::swap(uc_in_buf_, x.uc_in_buf_);
@@ -121,7 +107,7 @@ public:
 
 private:
     /* uncompressed output */
-    buffer<CharT> uc_in_buf_;
+    buffer<std::uint8_t> uc_in_buf_;
 
     /* deflate-state (holds zlib z_stream) */
     deflate_zstream zs_algo_;
@@ -131,9 +117,9 @@ private:
 }; /*buffered_deflate_zstream*/
 
 namespace std {
-    template <typename CharT>
-    void swap(buffered_deflate_zstream<CharT> & lhs,
-              buffered_deflate_zstream<CharT> & rhs)
+    inline void
+    swap(buffered_deflate_zstream & lhs,
+         buffered_deflate_zstream & rhs)
     {
         lhs.swap(rhs);
     }

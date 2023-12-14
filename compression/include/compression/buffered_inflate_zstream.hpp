@@ -23,11 +23,9 @@
  *       zs.uc_consume(uc_span);
  *   }
  */
-template <typename CharT>
 class buffered_inflate_zstream {
 public:
     using z_span_type = span<std::uint8_t>;
-    using uc_span_type = span<CharT>;
     using size_type = std::uint64_t;
 
 public:
@@ -35,7 +33,7 @@ public:
         : z_in_buf_{buf_z},
           uc_out_buf_{buf_z}
         {
-            zs_algo_.provide_output(uc_out_buf_.avail().template cast<std::uint8_t>());
+            zs_algo_.provide_output(uc_out_buf_.avail());
         }
 
     std::uint64_t n_in_total() const { return zs_algo_.n_in_total(); }
@@ -44,9 +42,9 @@ public:
     /* space available for more compressed input */
     z_span_type z_avail() const { return z_in_buf_.avail(); }
     /* space available for more uncompressed input (output of this object) */
-    uc_span_type uc_avail() const { return uc_out_buf_.avail(); }
+    z_span_type uc_avail() const { return uc_out_buf_.avail(); }
     /* uncompressed content available */
-    uc_span_type uc_contents() const { return uc_out_buf_.contents(); }
+    z_span_type uc_contents() const { return uc_out_buf_.contents(); }
 
     /* after populating some prefix of .z_avail(), make existence of that input known
      * so that it can be uncompressed
@@ -63,34 +61,20 @@ public:
     }
 
     /* consume some uncompressed input -- allows that buffer space to be reused */
-    void uc_consume(uc_span_type const & span) {
+    void uc_consume(z_span_type const & span) {
         if (span.size()) {
             uc_out_buf_.consume(span);
         }
 
         if (uc_out_buf_.empty()) {
             /* can recycle output */
-            zs_algo_.provide_output(uc_out_buf_.avail().template cast<std::uint8_t>());
+            zs_algo_.provide_output(uc_out_buf_.avail());
         }
     }
 
     void uc_consume_all() { this->uc_consume(this->uc_contents()); }
 
-    size_type inflate_chunk() {
-        if (zs_algo_.have_input()) {
-            //zs_algo_.provide_output(reinterpret_cast<uint8_t *>(uc_out_buf_.buf()) + xxx buf_pos,
-            //                         uc_out_buf_.buf_z() - xxx buf_pos);
-
-            std::pair<z_span_type, z_span_type> x = zs_algo_.inflate_chunk2();
-
-            z_in_buf_.consume(x.first);
-            uc_out_buf_.produce(x.second.template cast<CharT>());
-
-            return x.second.size();
-        } else {
-            return 0;
-        }
-    }
+    size_type inflate_chunk();
 
     void swap (buffered_inflate_zstream & x) {
         std::swap(z_in_buf_, x.z_in_buf_);
@@ -114,13 +98,13 @@ private:
     inflate_zstream zs_algo_;
 
     /* uncompressed input */
-    buffer<CharT> uc_out_buf_;
+    buffer<std::uint8_t> uc_out_buf_;
 };
 
 namespace std {
-    template <typename CharT>
-    void swap(buffered_inflate_zstream<CharT> & lhs,
-              buffered_inflate_zstream<CharT> & rhs)
+    inline void
+    swap(buffered_inflate_zstream & lhs,
+         buffered_inflate_zstream & rhs)
     {
         lhs.swap(rhs);
     }

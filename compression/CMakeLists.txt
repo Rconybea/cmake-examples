@@ -1,5 +1,5 @@
 set(SELF_LIB compression)
-set(SELF_SRCS compression.cpp inflate_zstream.cpp deflate_zstream.cpp)
+set(SELF_SRCS compression.cpp inflate_zstream.cpp deflate_zstream.cpp buffered_inflate_zstream.cpp buffered_deflate_zstream.cpp)
 set(SELF_VERSION 2)
 set(SELF_SOVERSION 2.3)
 

@@ -20,25 +20,20 @@ deflate_zstream::deflate_zstream()
         throw runtime_error("deflate_zstream: failed to initialize .zstream");
 }
 
+deflate_zstream::~deflate_zstream() {
+    ::deflateEnd(&zstream_);
+}
+
 streamsize
 deflate_zstream::deflate_chunk(bool final_flag) {
-    streamsize n_avail_pre = zstream_.avail_out;
-
-    int err = ::deflate(&zstream_,
-                        (final_flag ? Z_FINISH: 0) /*flush*/);
-
-    if (err == Z_STREAM_ERROR)
-        throw runtime_error("basic_zstreambuf::sync: impossible zlib deflate returned Z_STREAM_ERROR");
-
-    streamsize n_avail_post = zstream_.avail_out;
-    streamsize n_written = (n_avail_pre - n_avail_post);
-
-    return n_written;
+    return this->deflate_chunk2(final_flag).second.size();
 } /*deflate_chunk*/
 
 pair<span<uint8_t>, span<uint8_t>>
 deflate_zstream::deflate_chunk2(bool final_flag) {
-    /*
+    /* U = uncompressed data
+     * Z = compressed   data
+     *
      *                          (pre) zstream
      *         /--------------    .next_in
      *         |                  .next_out    -----------\
@@ -79,8 +74,4 @@ deflate_zstream::deflate_chunk2(bool final_flag) {
 
     return pair<span_type, span_type>(span_type(uc_pre, uc_post),
                                       span_type(z_pre, z_post));
-}
-
-deflate_zstream::~deflate_zstream() {
-    ::deflateEnd(&zstream_);
 }
