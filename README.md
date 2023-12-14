@@ -37,14 +37,16 @@ and to provide an opinionated (though possibly flawed) version of best practice
 9.  ex9:  add c++ executable X2 (`myzip`) also using A1
 10. ex10: add c++ unit test + header-only library dep O3 (`catch2`)
 11. ex11: add bash unit test (for `myzip`)
+12. ex12: refactor: use inflate/deflate (streaming) api for non-native soluation
 
+12. ex12: c++ inflate/deflate streambuf implementation
 4. c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
 5. project-specific macros - simplify
 6. project-specific macros - support (monorepo, separable) builds from same tree
 7. c++ executable X + library A + library B.
 8. c++ executable X + library A + library B + library C, A -> B -> C, C header-only
-9. add unit tests + performance benchmarks.
+9. add performance benchmarks.
 10. add code coverage.
 
 ## Preliminaries
