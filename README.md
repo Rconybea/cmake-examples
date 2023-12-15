@@ -3705,3 +3705,55 @@ Test project /home/roland/proj/cmake-examples/build
 
 Total Test time (real) =   0.05 sec
 ```
+
+Install:
+```
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression
+-- Installing: /home/roland/scratch/include/compression/tostr.hpp
+-- Installing: /home/roland/scratch/include/compression/compression.hpp
+-- Installing: /home/roland/scratch/include/compression/buffered_deflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/base_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/buffered_inflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/inflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/buffer.hpp
+-- Installing: /home/roland/scratch/include/compression/deflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/span.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Set runtime path of "/home/roland/scratch/lib/libcompression.so.2" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/include/zstream
+-- Installing: /home/roland/scratch/include/zstream/zstream.hpp
+-- Installing: /home/roland/scratch/include/zstream/zstreambuf.hpp
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/bin/myzip
+-- Set runtime path of "/home/roland/scratch/bin/myzip" to "/home/roland/scratch/lib"
+$ tree ~/scratch
+/home/roland/scratch
+├── bin
+│   ├── hello
+│   └── myzip
+├── include
+│   ├── compression
+│   │   ├── base_zstream.hpp
+│   │   ├── buffer.hpp
+│   │   ├── buffered_deflate_zstream.hpp
+│   │   ├── buffered_inflate_zstream.hpp
+│   │   ├── compression.hpp
+│   │   ├── deflate_zstream.hpp
+│   │   ├── inflate_zstream.hpp
+│   │   ├── span.hpp
+│   │   └── tostr.hpp
+│   └── zstream
+│       ├── zstream.hpp
+│       └── zstreambuf.hpp
+└── lib
+    ├── libcompression.so -> libcompression.so.2.3
+    ├── libcompression.so.2
+    └── libcompression.so.2.3 -> libcompression.so.2
+
+5 directories, 16 files
+```
