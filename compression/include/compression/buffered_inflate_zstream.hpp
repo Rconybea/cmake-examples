@@ -29,9 +29,10 @@ public:
     using size_type = std::uint64_t;
 
 public:
-    buffered_inflate_zstream(size_type buf_z = 64UL * 1024UL)
-        : z_in_buf_{buf_z},
-          uc_out_buf_{buf_z}
+    buffered_inflate_zstream(size_type buf_z = 64UL * 1024UL,
+                             size_type align_z = sizeof(char))
+        : z_in_buf_{buf_z, align_z},
+          uc_out_buf_{buf_z, align_z}
         {
             zs_algo_.provide_output(uc_out_buf_.avail());
         }

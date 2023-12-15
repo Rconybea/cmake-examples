@@ -43,9 +43,10 @@ public:
     using size_type = std::uint64_t;
 
 public:
-    buffered_deflate_zstream(size_type buf_z = 64 * 1024)
-        : uc_in_buf_{buf_z},
-          z_out_buf_{buf_z}
+    buffered_deflate_zstream(size_type buf_z = 64 * 1024,
+                             size_type align_z = 1)
+        : uc_in_buf_{buf_z, align_z},
+          z_out_buf_{buf_z, align_z}
         {
             zs_algo_.provide_output(z_out_buf_.avail());
         }
