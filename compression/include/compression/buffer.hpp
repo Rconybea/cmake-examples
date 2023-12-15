@@ -6,6 +6,7 @@
 #include <utility>
 #include <cstdint>
 #include <cassert>
+#include <new>
 
 /*
  *  .buf
@@ -26,10 +27,10 @@ public:
     using size_type = std::uint64_t;
 
 public:
-    buffer(size_type buf_z)
+    buffer(size_type buf_z, size_type align_z = sizeof(char))
         : is_owner_{true},
           lo_pos_{0}, hi_pos_{0},
-          buf_{new CharT [buf_z]},
+          buf_{new (std::align_val_t(align_z)) CharT [buf_z]},
           buf_z_{buf_z} {}
     ~buffer() { this->clear(); }
 
