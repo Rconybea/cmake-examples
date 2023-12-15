@@ -41,6 +41,8 @@ find_program(BASH_EXECUTABLE NAMES bash REQUIRED)
 
 add_subdirectory(compression)
 add_subdirectory(compression/utest)
+add_subdirectory(zstream)
+add_subdirectory(zstream/utest)
 add_subdirectory(app/hello)
 add_subdirectory(app/myzip)
 add_subdirectory(app/myzip/utest)
