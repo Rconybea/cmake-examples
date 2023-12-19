@@ -23,31 +23,31 @@ jobs:
     name: compile ex14 artifacts + run unit tests
     runs-on: ubuntu-latest
 
-  # filesystem tree on runner
-  #
-  #   ${{github.workspace}}
-  #   +- repo
-  #   |  \- cmake-examples     # source tree
-  #   \- build
-  #      \- cmake_examples     # build location
-  #
-  steps:
-  - name: checkout cmake-examples source
-    # see https://github.com/actions/checkout for latest
+    # filesystem tree on runner
+    #
+    #   ${{github.workspace}}
+    #   +- repo
+    #   |  \- cmake-examples     # source tree
+    #   \- build
+    #      \- cmake_examples     # build location
+    #
+    steps:
+    - name: checkout cmake-examples source
+      # see https://github.com/actions/checkout for latest
 
-    uses: actions/checkout@v3
-    with:
-      ref: ex14
-      path: repo/cmake-examples
+      uses: actions/checkout@v3
+      with:
+        ref: ex14
+        path: repo/cmake-examples
 
-  - name: prepare build directory
-    run: mkdir -p build/cmake-examples
+    - name: prepare build directory
+      run: mkdir -p build/cmake-examples
 
-  - name: configure cmake-examples
-    run: cmake -B ${{github.workspace}}/build/cmake-examples -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/local repo/cmake-examples
+    - name: configure cmake-examples
+      run: cmake -B ${{github.workspace}}/build/cmake-examples -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/local repo/cmake-examples
 
-  - name: build cmake-examples
-    run: cmake --build ${{github.workspace}}/build/cmake-examples --config ${{env.BUILD_TYPE}}
+    - name: build cmake-examples
+      run: cmake --build ${{github.workspace}}/build/cmake-examples --config ${{env.BUILD_TYPE}}
 
-  - name: install cmake-examples
-    run: cmake --install ${{github.workspace}}/build/cmake-examples
+    - name: install cmake-examples
+      run: cmake --install ${{github.workspace}}/build/cmake-examples
