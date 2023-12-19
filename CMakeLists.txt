@@ -33,7 +33,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "")
 if (NOT DEFINED PROJECT_CXX_FLAGS_DEBUG)
     set(PROJECT_CXX_FLAGS_DEBUG ${PROJECT_CXX_FLAGS} -ggdb
         CACHE STRING "debug c++ compiler flags")
-    # clear hardwired default.  we want control!
 endif()
 message("-- PROJECT_CXX_FLAGS_DEBUG: debug c++ flags are [${PROJECT_CXX_FLAGS_DEBUG}]")
 
