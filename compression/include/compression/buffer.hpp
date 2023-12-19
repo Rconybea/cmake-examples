@@ -29,9 +29,10 @@ public:
 public:
     buffer(size_type buf_z, size_type align_z = sizeof(char))
         : is_owner_{true},
-          lo_pos_{0}, hi_pos_{0},
           buf_{new (std::align_val_t(align_z)) CharT [buf_z]},
-          buf_z_{buf_z} {}
+          buf_z_{buf_z},
+          lo_pos_{0}, hi_pos_{0}
+ {}
     ~buffer() { this->clear(); }
 
     CharT * buf() const { return buf_; }
