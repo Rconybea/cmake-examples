@@ -10,15 +10,67 @@ message("-- CMAKE_CXX_STANDARD: c++ standard level is [${CMAKE_CXX_STANDARD}]")
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if (NOT DEFINED PROJECT_CXX_FLAGS)
-    set(PROJECT_CXX_FLAGS "-Werror -Wall -Wextra" CACHE STRING "project c++ compiler flags")
+    set(PROJECT_CXX_FLAGS -Werror -Wall -Wextra -fno-strict-aliasing CACHE STRING "project c++ compiler flags")
 endif()
 message("-- PROJECT_CXX_FLAGS: project c++ flags are [${PROJECT_CXX_FLAGS}]")
+
+# ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=debug
+
+# clear out hardwired default.
+# we want override project-level defaults, so need to prevent interference from hardwired defaults
+# (the problem with non-empty hardwired defaults is that we can't tell if they've been set on the
+# command line)
+#
+set(CMAKE_CXX_FLAGS_DEBUG "")
+
+# CMAKE_CXX_FLAGS_DEBUG is built-in to cmake and has non-empty default.
+#  -> we cannot tell whether it was set on the command line
+#  -> use PROJECT_CXX_FLAGS_DEBUG instead
+#
+# built-in default value is -g; can hardwire different project policy here
+#
+if (NOT DEFINED PROJECT_CXX_FLAGS_DEBUG)
+    set(PROJECT_CXX_FLAGS_DEBUG ${PROJECT_CXX_FLAGS} -ggdb
+        CACHE STRING "debug c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_DEBUG: debug c++ flags are [${PROJECT_CXX_FLAGS_DEBUG}]")
+
+add_compile_options("$<$<CONFIG:DEBUG>:${PROJECT_CXX_FLAGS_DEBUG}>")
+
+# ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=release
+
+# clear out hardwired default.
+# we want override project-level defaults, so need to prevent interference from hardwired defaults
+# (the problem with non-empty hardwired defaults is that we can't tell if they've been set on the
+# command line)
+#
+set(CMAKE_CXX_FLAGS_RELEASE "")
+
+# CMAKE_CXX_FLAGS_Release is built-in to cmake
+#  -> automatically added to all c++ compilation targets
+#     when CMAKE_BUILD_TYPE=Release
+#
+# built-in default value is -O3 -DNDEBUG;  can hardwire different project policy here
+#
+if (NOT DEFINED PROJECT_CXX_FLAGS_RELEASE)
+    set(PROJECT_CXX_FLAGS_RELEASE ${PROJECT_CXX_FLAGS} -march=native -O3 -DNDEBUG
+        CACHE STRING "release c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_RELEASE: release c++ flags are [${PROJECT_CXX_FLAGS_RELEASE}]")
+
+add_compile_options("$<$<CONFIG:RELEASE>:${PROJECT_CXX_FLAGS_RELEASE}>")
+
+# ----------------------------------------------------------------
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
     set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
 endif()
+
+# ----------------------------------------------------------------
 
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
