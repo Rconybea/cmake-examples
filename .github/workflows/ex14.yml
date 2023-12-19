@@ -1,0 +1,53 @@
+# workflow for building cmake-examples
+# using stock github runner (in practice some ubuntu release)
+#
+
+name: cmake-examples builder
+
+on:
+  # trigger github-hosted rebuild when contents of branch 'ex14' changes
+  # (most project would use 'main' here;  the progressive branch structure
+  # of cmake-examples makes that not viable, since the build we want to invoke
+  # doesn't exist in the 'main' branch)
+  #
+  push:
+    branches: [ "ex14" ]
+  pull_request:
+    branches: [ "ex14" ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  ex14_build:
+    name: compile ex14 artifacts + run unit tests
+    runs-on: ubuntu-latest
+
+  # filesystem tree on runner
+  #
+  #   ${{github.workspace}}
+  #   +- repo
+  #   |  \- cmake-examples     # source tree
+  #   \- build
+  #      \- cmake_examples     # build location
+  #
+  steps:
+  - name: checkout cmake-examples source
+    # see https://github.com/actions/checkout for latest
+
+    uses: actions/checkout@v3
+    with:
+      ref: ex14
+      path: repo/cmake-examples
+
+  - name: prepare build directory
+    run: mkdir -p build/cmake-examples
+
+  - name: configure cmake-examples
+    run: cmake -B ${{github.workspace}}/build/cmake-examples -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/local repo/cmake-examples
+
+  - name: build cmake-examples
+    run: cmake --build ${{github.workspace}}/build/cmake-examples --config ${{env.BUILD_TYPE}}
+
+  - name: install cmake-examples
+    run: cmake --install ${{github.workspace}}/build/cmake-examples
