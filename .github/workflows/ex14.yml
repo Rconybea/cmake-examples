@@ -30,8 +30,8 @@ jobs:
     - name: install catch2
       run: sudo apt-get install -y catch2
 
-    - name: check package list
-      run: apt-cache search boost
+    #- name: check package list
+    #  run: apt-cache search boost
 
     - name: install boost program-options
       run: sudo apt-get install -y libboost-program-options1.74-dev
@@ -62,6 +62,9 @@ jobs:
 
     - name: build cmake-examples
       run: cmake --build ${{github.workspace}}/build/cmake-examples --config ${{env.BUILD_TYPE}}
+
+    - name: test cmake-examples
+      run: (cd ${{github.workspace}}/build/cmake-examples && ctest)
 
     - name: install cmake-examples
       run: cmake --install ${{github.workspace}}/build/cmake-examples
