@@ -27,6 +27,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
 ## Progression
 1.  ex1:  c++ executable X1 (`hello`)
     ex1b: c++ standard + compile-time flags
+    ex1c: multiple build configurations
 2.  ex2:  add LSP integration
 3.  ex3:  c++ executable X1 + cmake-aware library dep O1 (`boost::program_options`), using cmake `find_package()`
 4.  ex4:  c++ executable X1 + non-cmake library dep O2 (`zlib`)
@@ -121,6 +122,7 @@ them every time we invoke cmake.
 We can do this using cmake cache variables:
 
 ```
+$ cd cmake-examples
 $ git switch ex1b
 ```
 
