@@ -30,8 +30,11 @@ jobs:
     - name: install catch2
       run: sudo apt-get install -y catch2
 
-    - name: install boost
-      run: sudo apt-get install -y boost
+    - name: check package list
+      run: apt-cache search boost
+
+    - name: install boost program-options
+      run: sudo apt-get install -y libboost-program-options1.74-dev
 
     # ----------------------------------------------------------------
     # filesystem tree on runner
