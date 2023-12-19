@@ -27,6 +27,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
 ## Progression
 1.  ex1:  c++ executable X1 (`hello`)
     ex1b: c++ standard + compile-time flags
+    ex1c: multiple build configurations
 2.  ex2:  add LSP integration
 3.  ex3:  c++ executable X1 + cmake-aware library dep O1 (`boost::program_options`), using cmake `find_package()`
 4.  ex4:  c++ executable X1 + non-cmake library dep O2 (`zlib`)
@@ -38,10 +39,12 @@ and to provide an opinionated (though possibly flawed) version of best practice
 10. ex10: add c++ unit test + header-only library dep O3 (`catch2`)
 11. ex11: add bash unit test (for `myzip`)
 12. ex12: refactor: use inflate/deflate (streaming) api for non-native solution
-13. ex13: example c++ header-only library A2 (`zstream`) with A2 -> A1 -> O2, monorepo style
+13. ex13: example c++ header-only library A2 (`zstream`) with A2 -> A1 -> O2, monorepo-style
+14. ex14: github CI example
 
-* ex14: find_package() support
-* ex15: add pybind11 library
+* ex15: find_package() support
+* ex16: add pybind11 library (pyzstream)
+* ex17: add sphinx doc
 
 * c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
@@ -49,6 +52,8 @@ and to provide an opinionated (though possibly flawed) version of best practice
 * project-specific macros - support (monorepo, separable) builds from same tree
 * add performance benchmarks.
 * add code coverage.
+
+- monorepo-style: artifacts using dependencies supplied from same repo and build tree
 
 ## Preliminaries
 
@@ -117,6 +122,7 @@ them every time we invoke cmake.
 We can do this using cmake cache variables:
 
 ```
+$ cd cmake-examples
 $ git switch ex1b
 ```
 
@@ -152,6 +158,149 @@ $ cmake -B build11
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /home/roland/proj/cmake-examples/build11
+```
+
+### Example 1c: multiple build configurations (debug, release etc)
+
+We want to support compiler flags for various build configurations:  debug, release, sanitize, coverage etc.
+
+For compiler flags, cmake provides automatic variables `CMAKE_CXX_FLAGS_<CONFIG>`
+(e.g. with `<CONFIG>` set to `debug` with `cmake -DCMAKE_BUILD_TYPE=debug`).
+
+However,  these come with built-in non-empty default values.
+for example with gcc build the default value of `CMAKE_CXX_FLAGS_RELEASE` is `-O3 -DNDEBUG`.
+
+This creates a conflict with the following set of objectives:
+1. want curated build-type-specific project-level defaults for different builds
+2. want to be able to override these defaults from the command line
+
+The problem with a built-in non-empty default, is that when writing cmake code we don't know:
+was observed value provided by cmake, or from command line?
+
+We'll work around this problem by using variable names not known to cmake.
+
+```
+# CMakeLists.txt
+
+cmake_minimum_required(VERSION 3.25)
+project(cmake-examples VERSION 1.0)
+enable_language(CXX)
+
+if (NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 23 CACHE STRING "c++ standard level [11|14|17|20|23]")
+endif()
+message("-- CMAKE_CXX_STANDARD: c++ standard level is [${CMAKE_CXX_STANDARD}]")
+
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+if (NOT DEFINED PROJECT_CXX_FLAGS)
+    set(PROJECT_CXX_FLAGS -Werror -Wall -Wextra -fno-strict-aliasing CACHE STRING "project c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS: project c++ flags are [${PROJECT_CXX_FLAGS}]")
+
+# ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=debug
+
+# clear out hardwired default.
+# we want override project-level defaults, so need to prevent interference from hardwired defaults
+# (the problem with non-empty hardwired defaults is that we can't tell if they've been set on the
+# command line)
+#
+set(CMAKE_CXX_FLAGS_DEBUG "")
+
+# CMAKE_CXX_FLAGS_DEBUG is built-in to cmake and has non-empty default.
+#  -> we cannot tell whether it was set on the command line
+#  -> use PROJECT_CXX_FLAGS_DEBUG instead
+#
+# built-in default value is -g; can hardwire different project policy here
+#
+if (NOT DEFINED PROJECT_CXX_FLAGS_DEBUG)
+    set(PROJECT_CXX_FLAGS_DEBUG ${PROJECT_CXX_FLAGS} -ggdb
+        CACHE STRING "debug c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_DEBUG: debug c++ flags are [${PROJECT_CXX_FLAGS_DEBUG}]")
+
+add_compile_options("$<$<CONFIG:DEBUG>:${PROJECT_CXX_FLAGS_DEBUG}>")
+
+# ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=release
+
+# clear out hardwired default.
+# we want override project-level defaults, so need to prevent interference from hardwired defaults
+# (the problem with non-empty hardwired defaults is that we can't tell if they've been set on the
+# command line)
+#
+set(CMAKE_CXX_FLAGS_RELEASE "")
+
+# CMAKE_CXX_FLAGS_Release is built-in to cmake
+#  -> automatically added to all c++ compilation targets
+#     when CMAKE_BUILD_TYPE=Release
+#
+# built-in default value is -O3 -DNDEBUG;  can hardwire different project policy here
+#
+if (NOT DEFINED PROJECT_CXX_FLAGS_RELEASE)
+    set(PROJECT_CXX_FLAGS_RELEASE ${PROJECT_CXX_FLAGS} -march=native -O3 -DNDEBUG
+        CACHE STRING "release c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_RELEASE: release c++ flags are [${PROJECT_CXX_FLAGS_RELEASE}]")
+
+add_compile_options("$<$<CONFIG:RELEASE>:${PROJECT_CXX_FLAGS_RELEASE}>")
+
+# ----------------------------------------------------------------
+
+set(SELF_EXE hello)
+set(SELF_SRCS hello.cpp)
+
+add_executable(${SELF_EXE} ${SELF_SRCS})
+```
+
+The fancy generator expressions like `add_compile_options("$<$<CONFIG:DEBUG>:${PROJECT_CXX_FLAGS_DEBUG}>")`
+only take effect with `-DCMAKE_BUILD_TYPE=debug`.
+
+For example:
+```
+$ cd cmake-examples
+$ git switch ex1c
+$ cmake -DCMAKE_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=debug -B build_debug
+-- The C compiler identification is GNU 12.2.0
+-- The CXX compiler identification is GNU 12.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin//gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- CMAKE_CXX_STANDARD: c++ standard level is [20]
+-- PROJECT_CXX_FLAGS: project c++ flags are [-Werror;-Wall;-Wextra;-fno-strict-aliasing]
+-- PROJECT_CXX_FLAGS_DEBUG: debug c++ flags are [-Werror;-Wall;-Wextra;-fno-strict-aliasing;-ggdb]
+-- PROJECT_CXX_FLAGS_RELEASE: release c++ flags are [-Werror;-Wall;-Wextra;-fno-strict-aliasing;-march=native;-O3;-DNDEBUG]
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build_debug
+$ cmake --build build_debug --verbose
+cmake -S/home/roland/proj/cmake-examples -B/home/roland/proj/cmake-examples/build_debug --check-build-system CMakeFiles/Makefile.cmake 0
+cmake -E cmake_progress_start /home/roland/proj/cmake-examples/build_debug/CMakeFiles /home/roland/proj/cmake-examples/build_debug//CMakeFiles/progress.marks
+make  -f CMakeFiles/Makefile2 all
+make[1]: Entering directory '/home/roland/proj/cmake-examples/build_debug'
+make  -f CMakeFiles/hello.dir/build.make CMakeFiles/hello.dir/depend
+make[2]: Entering directory '/home/roland/proj/cmake-examples/build_debug'
+cd /home/roland/proj/cmake-examples/build_debug && cmake -E cmake_depends "Unix Makefiles" /home/roland/proj/cmake-examples /home/roland/proj/cmake-examples /home/roland/proj/cmake-examples/build_debug /home/roland/proj/cmake-examples/build_debug /home/roland/proj/cmake-examples/build_debug/CMakeFiles/hello.dir/DependInfo.cmake --color=
+make[2]: Leaving directory '/home/roland/proj/cmake-examples/build_debug'
+make  -f CMakeFiles/hello.dir/build.make CMakeFiles/hello.dir/build
+make[2]: Entering directory '/home/roland/proj/cmake-examples/build_debug'
+[ 50%] Building CXX object CMakeFiles/hello.dir/hello.cpp.o
+g++   -Werror -Wall -Wextra -fno-strict-aliasing -ggdb -std=gnu++20 -MD -MT CMakeFiles/hello.dir/hello.cpp.o -MF CMakeFiles/hello.dir/hello.cpp.o.d -o CMakeFiles/hello.dir/hello.cpp.o -c /home/roland/proj/cmake-examples/hello.cpp
+[100%] Linking CXX executable hello
+cmake -E cmake_link_script CMakeFiles/hello.dir/link.txt --verbose=1
+g++ CMakeFiles/hello.dir/hello.cpp.o -o hello
+make[2]: Leaving directory '/home/roland/proj/cmake-examples/build_debug'
+[100%] Built target hello
+make[1]: Leaving directory '/home/roland/proj/cmake-examples/build_debug'
+cmake -E cmake_progress_start /home/roland/proj/cmake-examples/build_debug/CMakeFiles 0
 ```
 
 ## Example 2
@@ -2768,6 +2917,7 @@ $ tree ~/scratch
 # Example 13
 
 Provide inflating/deflating specialization of `std::streambuf`.
+This requires generalizing build to handle a mixture of internal-to-repo and external-to-repo library dependencies
 
 ```
 $ cd cmake-examples
@@ -2776,6 +2926,7 @@ $ git checkout ex13
 
 source tree:
 ```
+$ tree
 .
 ├── CMakeLists.txt
 ├── LICENSE
@@ -3705,3 +3856,226 @@ Test project /home/roland/proj/cmake-examples/build
 
 Total Test time (real) =   0.05 sec
 ```
+
+Install:
+```
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression
+-- Installing: /home/roland/scratch/include/compression/tostr.hpp
+-- Installing: /home/roland/scratch/include/compression/compression.hpp
+-- Installing: /home/roland/scratch/include/compression/buffered_deflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/base_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/buffered_inflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/inflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/buffer.hpp
+-- Installing: /home/roland/scratch/include/compression/deflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/span.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Set runtime path of "/home/roland/scratch/lib/libcompression.so.2" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/include/zstream
+-- Installing: /home/roland/scratch/include/zstream/zstream.hpp
+-- Installing: /home/roland/scratch/include/zstream/zstreambuf.hpp
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/bin/myzip
+-- Set runtime path of "/home/roland/scratch/bin/myzip" to "/home/roland/scratch/lib"
+$ tree ~/scratch
+/home/roland/scratch
+├── bin
+│   ├── hello
+│   └── myzip
+├── include
+│   ├── compression
+│   │   ├── base_zstream.hpp
+│   │   ├── buffer.hpp
+│   │   ├── buffered_deflate_zstream.hpp
+│   │   ├── buffered_inflate_zstream.hpp
+│   │   ├── compression.hpp
+│   │   ├── deflate_zstream.hpp
+│   │   ├── inflate_zstream.hpp
+│   │   ├── span.hpp
+│   │   └── tostr.hpp
+│   └── zstream
+│       ├── zstream.hpp
+│       └── zstreambuf.hpp
+└── lib
+    ├── libcompression.so -> libcompression.so.2.3
+    ├── libcompression.so.2
+    └── libcompression.so.2.3 -> libcompression.so.2
+
+5 directories, 16 files
+```
+
+# Example 14
+
+Provide github action support.
+This will only work out-of-the-box for a project hosted on github;
+that said, you can expect the mechanics we rely on here to translate to other CI platforms.
+
+```
+$ cd cmake-examples
+$ git checkout ex14
+```
+
+source tree:
+```
+$ tree .github
+.github
+└── workflows
+    └── ex14.yml
+
+1 directory, 1 file
+```
+
+(otherwise source tree unchanged from previous example)
+```
+$ tree
+.
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── app
+│   ├── hello
+│   │   ├── CMakeLists.txt
+│   │   └── hello.cpp
+│   └── myzip
+│       ├── CMakeLists.txt
+│       ├── myzip.cpp
+│       └── utest
+│           ├── CMakeLists.txt
+│           ├── myzip.utest
+│           └── textfile
+├── compile_commands.json -> build/compile_commands.json
+├── compression
+│   ├── CMakeLists.txt
+│   ├── buffered_deflate_zstream.cpp
+│   ├── buffered_inflate_zstream.cpp
+│   ├── compression.cpp
+│   ├── deflate_zstream.cpp
+│   ├── include
+│   │   └── compression
+│   │       ├── base_zstream.hpp
+│   │       ├── buffer.hpp
+│   │       ├── buffered_deflate_zstream.hpp
+│   │       ├── buffered_inflate_zstream.hpp
+│   │       ├── compression.hpp
+│   │       ├── deflate_zstream.hpp
+│   │       ├── inflate_zstream.hpp
+│   │       ├── span.hpp
+│   │       └── tostr.hpp
+│   ├── inflate_zstream.cpp
+│   └── utest
+│       ├── CMakeLists.txt
+│       ├── compression.test.cpp
+│       └── compression_utest_main.cpp
+└── zstream
+    ├── CMakeLists.txt
+    ├── include
+    │   └── zstream
+    │       ├── zstream.hpp
+    │       └── zstreambuf.hpp
+    └── utest
+        ├── CMakeLists.txt
+        ├── text.cpp
+        ├── text.hpp
+        ├── zstream.test.cpp
+        ├── zstream_utest_main.cpp
+        └── zstreambuf.test.cpp
+
+12 directories, 38 files
+```
+
+Changes:
+1. new directory `.github/workflows`
+2. new file `.github/workflows/ex14.yml`
+   I believe any `.yml` file in `.github/workflows` will be included as a trigger for github actions.
+
+ex14.yml:
+```
+# workflow for building cmake-examples
+# using stock github runner (in practice some ubuntu release)
+#
+
+name: cmake-examples builder
+
+on:
+  # trigger github-hosted rebuild when contents of branch 'ex14' changes
+  # (most project would use 'main' here;  the progressive branch structure
+  # of cmake-examples makes that not viable, since the build we want to invoke
+  # doesn't exist in the 'main' branch)
+  #
+  push:
+    branches: [ "ex14" ]
+  pull_request:
+    branches: [ "ex14" ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  ex14_build:
+    name: compile ex14 artifacts + run unit tests
+    runs-on: ubuntu-latest
+
+    # ----------------------------------------------------------------
+    # external dependencies
+
+    steps:
+    - name: install catch2
+      run: sudo apt-get install -y catch2
+
+    #- name: check package list
+    #  run: apt-cache search boost
+
+    - name: install boost program-options
+      run: sudo apt-get install -y libboost-program-options1.74-dev
+
+    # ----------------------------------------------------------------
+    # filesystem tree on runner
+    #
+    #   ${{github.workspace}}
+    #   +- repo
+    #   |  \- cmake-examples     # source tree
+    #   \- build
+    #      \- cmake_examples     # build location
+    #
+
+    - name: checkout cmake-examples source
+      # see https://github.com/actions/checkout for latest
+
+      uses: actions/checkout@v3
+      with:
+        ref: ex14
+        path: repo/cmake-examples
+
+    - name: prepare build directory
+      run: mkdir -p build/cmake-examples
+
+    - name: configure cmake-examples
+      run: cmake -B ${{github.workspace}}/build/cmake-examples -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/local repo/cmake-examples
+
+    - name: build cmake-examples
+      run: cmake --build ${{github.workspace}}/build/cmake-examples --config ${{env.BUILD_TYPE}}
+
+    - name: test cmake-examples
+      run: (cd ${{github.workspace}}/build/cmake-examples && ctest)
+
+    - name: install cmake-examples
+      run: cmake --install ${{github.workspace}}/build/cmake-examples
+
+```
+
+Remarks:
+1. You can review github actions activity at this url: https://github.com/rconybea/cmake-examples/actions
+2. Our CI workflow starts with a stock linux image (`ubuntu-latest`) provided by github.
+   We can and must install additional dependencies (`catch2`, `boost`)
+3. Note that we don't get full control over the CI host environment here - for example we rely on
+   the boost version that comes with whichever ubuntu release github provides;
+   it's possible for CI to fail sometime if/when a non-backward-compatible change shows up in
+   latest ubuntu release.
+4. We can achieve a fully-reproducible CI pipeline by containerizing.
+   See `.github/workflows/main.yml` in https://github.com/rconybea/xo-nix3 for github CI workflow using a custom docker container.
+   See https://github.com/rconybea/docker-xo-builder for construction of the docker container
