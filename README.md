@@ -38,10 +38,12 @@ and to provide an opinionated (though possibly flawed) version of best practice
 10. ex10: add c++ unit test + header-only library dep O3 (`catch2`)
 11. ex11: add bash unit test (for `myzip`)
 12. ex12: refactor: use inflate/deflate (streaming) api for non-native solution
-13. ex13: example c++ header-only library A2 (`zstream`) with A2 -> A1 -> O2, monorepo style
+13. ex13: example c++ header-only library A2 (`zstream`) with A2 -> A1 -> O2, monorepo-style
+14. ex14: github CI example
 
-* ex14: find_package() support
-* ex15: add pybind11 library
+* ex15: find_package() support
+* ex16: add pybind11 library (pyzstream)
+* ex17: add sphinx doc
 
 * c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
@@ -49,6 +51,8 @@ and to provide an opinionated (though possibly flawed) version of best practice
 * project-specific macros - support (monorepo, separable) builds from same tree
 * add performance benchmarks.
 * add code coverage.
+
+- monorepo-style: artifacts using dependencies supplied from same repo and build tree
 
 ## Preliminaries
 
@@ -2768,6 +2772,7 @@ $ tree ~/scratch
 # Example 13
 
 Provide inflating/deflating specialization of `std::streambuf`.
+This requires generalizing build to handle a mixture of internal-to-repo and external-to-repo library dependencies
 
 ```
 $ cd cmake-examples
@@ -2776,6 +2781,7 @@ $ git checkout ex13
 
 source tree:
 ```
+$ tree
 .
 ├── CMakeLists.txt
 ├── LICENSE
@@ -3757,3 +3763,174 @@ $ tree ~/scratch
 
 5 directories, 16 files
 ```
+
+# Example 14
+
+Provide github action support.
+This will only work out-of-the-box for a project hosted on github;
+that said, you can expect the mechanics we rely on here to translate to other CI platforms.
+
+```
+$ cd cmake-examples
+$ git checkout ex14
+```
+
+source tree:
+```
+$ tree .github
+.github
+└── workflows
+    └── ex14.yml
+
+1 directory, 1 file
+```
+
+(otherwise source tree unchanged from previous example)
+```
+$ tree
+.
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── app
+│   ├── hello
+│   │   ├── CMakeLists.txt
+│   │   └── hello.cpp
+│   └── myzip
+│       ├── CMakeLists.txt
+│       ├── myzip.cpp
+│       └── utest
+│           ├── CMakeLists.txt
+│           ├── myzip.utest
+│           └── textfile
+├── compile_commands.json -> build/compile_commands.json
+├── compression
+│   ├── CMakeLists.txt
+│   ├── buffered_deflate_zstream.cpp
+│   ├── buffered_inflate_zstream.cpp
+│   ├── compression.cpp
+│   ├── deflate_zstream.cpp
+│   ├── include
+│   │   └── compression
+│   │       ├── base_zstream.hpp
+│   │       ├── buffer.hpp
+│   │       ├── buffered_deflate_zstream.hpp
+│   │       ├── buffered_inflate_zstream.hpp
+│   │       ├── compression.hpp
+│   │       ├── deflate_zstream.hpp
+│   │       ├── inflate_zstream.hpp
+│   │       ├── span.hpp
+│   │       └── tostr.hpp
+│   ├── inflate_zstream.cpp
+│   └── utest
+│       ├── CMakeLists.txt
+│       ├── compression.test.cpp
+│       └── compression_utest_main.cpp
+└── zstream
+    ├── CMakeLists.txt
+    ├── include
+    │   └── zstream
+    │       ├── zstream.hpp
+    │       └── zstreambuf.hpp
+    └── utest
+        ├── CMakeLists.txt
+        ├── text.cpp
+        ├── text.hpp
+        ├── zstream.test.cpp
+        ├── zstream_utest_main.cpp
+        └── zstreambuf.test.cpp
+
+12 directories, 38 files
+```
+
+Changes:
+1. new directory `.github/workflows`
+2. new file `.github/workflows/ex14.yml`
+   I believe any `.yml` file in `.github/workflows` will be included as a trigger for github actions.
+
+ex14.yml:
+```
+# workflow for building cmake-examples
+# using stock github runner (in practice some ubuntu release)
+#
+
+name: cmake-examples builder
+
+on:
+  # trigger github-hosted rebuild when contents of branch 'ex14' changes
+  # (most project would use 'main' here;  the progressive branch structure
+  # of cmake-examples makes that not viable, since the build we want to invoke
+  # doesn't exist in the 'main' branch)
+  #
+  push:
+    branches: [ "ex14" ]
+  pull_request:
+    branches: [ "ex14" ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  ex14_build:
+    name: compile ex14 artifacts + run unit tests
+    runs-on: ubuntu-latest
+
+    # ----------------------------------------------------------------
+    # external dependencies
+
+    steps:
+    - name: install catch2
+      run: sudo apt-get install -y catch2
+
+    #- name: check package list
+    #  run: apt-cache search boost
+
+    - name: install boost program-options
+      run: sudo apt-get install -y libboost-program-options1.74-dev
+
+    # ----------------------------------------------------------------
+    # filesystem tree on runner
+    #
+    #   ${{github.workspace}}
+    #   +- repo
+    #   |  \- cmake-examples     # source tree
+    #   \- build
+    #      \- cmake_examples     # build location
+    #
+
+    - name: checkout cmake-examples source
+      # see https://github.com/actions/checkout for latest
+
+      uses: actions/checkout@v3
+      with:
+        ref: ex14
+        path: repo/cmake-examples
+
+    - name: prepare build directory
+      run: mkdir -p build/cmake-examples
+
+    - name: configure cmake-examples
+      run: cmake -B ${{github.workspace}}/build/cmake-examples -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/local repo/cmake-examples
+
+    - name: build cmake-examples
+      run: cmake --build ${{github.workspace}}/build/cmake-examples --config ${{env.BUILD_TYPE}}
+
+    - name: test cmake-examples
+      run: (cd ${{github.workspace}}/build/cmake-examples && ctest)
+
+    - name: install cmake-examples
+      run: cmake --install ${{github.workspace}}/build/cmake-examples
+
+```
+
+Remarks:
+1. You can review github actions activity at this url: https://github.com/rconybea/cmake-examples/actions
+2. Our CI workflow starts with a stock linux image (`ubuntu-latest`) provided by github.
+   We can and must install additional dependencies (`catch2`, `boost`)
+3. Note that we don't get full control over the CI host environment here - for example we rely on
+   the boost version that comes with whichever ubuntu release github provides;
+   it's possible for CI to fail sometime if/when a non-backward-compatible change shows up in
+   latest ubuntu release.
+4. We can achieve a fully-reproducible CI pipeline by containerizing.
+   See `.github/workflows/main.yml` in https://github.com/rconybea/xo-nix3 for github CI workflow using a custom docker container.
+   See https://github.com/rconybea/docker-xo-builder for construction of the docker container
