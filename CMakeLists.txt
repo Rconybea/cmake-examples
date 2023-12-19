@@ -10,9 +10,11 @@ message("-- CMAKE_CXX_STANDARD: c++ standard level is [${CMAKE_CXX_STANDARD}]")
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if (NOT DEFINED PROJECT_CXX_FLAGS)
-    set(PROJECT_CXX_FLAGS "-Werror -Wall -Wextra" CACHE STRING "project c++ compiler flags")
+    set(PROJECT_CXX_FLAGS -Werror -Wall -Wextra -fno-strict-aliasing CACHE STRING "project c++ compiler flags")
 endif()
 message("-- PROJECT_CXX_FLAGS: project c++ flags are [${PROJECT_CXX_FLAGS}]")
+
+add_compile_options(${PROJECT_CXX_FLAGS})
 
 set(SELF_EXE hello)
 set(SELF_SRCS hello.cpp)
