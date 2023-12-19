@@ -30,6 +30,9 @@ jobs:
     - name: install catch2
       run: sudo apt-get install -y catch2
 
+    - name: install boost
+      run: sudo apt-get install -y boost
+
     # ----------------------------------------------------------------
     # filesystem tree on runner
     #
