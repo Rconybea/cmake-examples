@@ -4079,3 +4079,119 @@ Remarks:
 4. We can achieve a fully-reproducible CI pipeline by containerizing.
    See `.github/workflows/main.yml` in https://github.com/rconybea/xo-nix3 for github CI workflow using a custom docker container.
    See https://github.com/rconybea/docker-xo-builder for construction of the docker container
+
+# Example 15
+
+Provide unit test coverage.
+We will use gcov and lcov.
+
+```
+$ cd cmake-examples
+$ git switch ex15
+```
+
+source tree
+```
+$ tree
+.
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── app
+│   ├── hello
+│   │   ├── CMakeLists.txt
+│   │   └── hello.cpp
+│   └── myzip
+│       ├── CMakeLists.txt
+│       ├── myzip.cpp
+│       └── utest
+│           ├── CMakeLists.txt
+│           ├── myzip.utest
+│           └── textfile
+├── cmake
+│   ├── gen-ccov.in
+│   └── lcov-harness
+├── compile_commands.json -> build/compile_commands.json
+├── compression
+│   ├── CMakeLists.txt
+│   ├── buffered_deflate_zstream.cpp
+│   ├── buffered_inflate_zstream.cpp
+│   ├── compression.cpp
+│   ├── deflate_zstream.cpp
+│   ├── include
+│   │   └── compression
+│   │       ├── base_zstream.hpp
+│   │       ├── buffer.hpp
+│   │       ├── buffered_deflate_zstream.hpp
+│   │       ├── buffered_inflate_zstream.hpp
+│   │       ├── compression.hpp
+│   │       ├── deflate_zstream.hpp
+│   │       ├── inflate_zstream.hpp
+│   │       ├── span.hpp
+│   │       └── tostr.hpp
+│   ├── inflate_zstream.cpp
+│   └── utest
+│       ├── CMakeLists.txt
+│       ├── compression.test.cpp
+│       └── compression_utest_main.cpp
+└── zstream
+    ├── CMakeLists.txt
+    ├── include
+    │   └── zstream
+    │       ├── zstream.hpp
+    │       └── zstreambuf.hpp
+    └── utest
+        ├── CMakeLists.txt
+        ├── text.cpp
+        ├── text.hpp
+        ├── zstream.test.cpp
+        ├── zstream_utest_main.cpp
+        └── zstreambuf.test.cpp
+
+13 directories, 40 files
+```
+
+Changes:
+1. provide default compile flags for configuration `COVERAGE`
+2. executable targets will need to link with the `gcov` library.
+3. script to post-process coverage information
+4. for convenience,  have cmake generate a wrapper script `gen-ccov`
+
+To build with code coverage enabled:
+```
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=coverage -B build_ccov
+$ cmake --build build_ccov -j
+$ (cd build_ccov && ctest)    # run instrument tests to generate coverage data
+$ ./build_ccov/gen-ccov       # collect + post-process coverage data, generate html tree
+...
++ lcov --list /home/roland/proj/cmake-examples/build_coverage/ccov/out3.info
+Reading tracefile /home/roland/proj/cmake-examples/build_ccov/ccov/out3.info
+                                               |Lines      |Functions|Branches
+Filename                                       |Rate    Num|Rate  Num|Rate   Num
+================================================================================
+[/home/roland/proj/cmake-examples/app/myzip/]
+myzip.cpp                                      |85.7%    35| 100%   1|    -    0
+
+[/home/roland/proj/cmake-examples/compression/]
+buffered_deflate_zstream.cpp                   | 100%     5| 100%   1|    -    0
+buffered_inflate_zstream.cpp                   | 100%     5| 100%   1|    -    0
+compression.cpp                                |75.7%    74| 100%   4|    -    0
+deflate_zstream.cpp                            |85.2%    27|75.0%   4|    -    0
+include/compression/base_zstream.hpp           |92.3%    13| 100%   1|    -    0
+include/compression/buffer.hpp                 |96.7%    30| 100%   3|    -    0
+include/compression/bu...ed_deflate_zstream.hpp| 100%    18| 100%   5|    -    0
+include/compression/bu...ed_inflate_zstream.hpp|95.0%    20| 100%   7|    -    0
+include/compression/span.hpp                   | 100%     6|    -   0|    -    0
+include/compression/tostr.hpp                  | 100%     9|43.2%  44|    -    0
+inflate_zstream.cpp                            |76.7%    30|75.0%   4|    -    0
+
+[/home/roland/proj/cmake-examples/zstream/include/zstream/]
+zstream.hpp                                    | 100%     7|66.7%   3|    -    0
+zstreambuf.hpp                                 |81.3%    75|90.0%  10|    -    0
+================================================================================
+                                         Total:|85.6%   354|67.0%  88|    -    0
+```
+
+For browseable dataset cross-correlated with source code,
+point web browser to `file:///path/to/build_ccov/ccov/html/index.html`
