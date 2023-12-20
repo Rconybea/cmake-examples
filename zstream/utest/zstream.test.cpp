@@ -58,12 +58,12 @@ TEST_CASE("zstream", "[zstream]") {
         zs.read(&((*ucbuf2)[0]), ucbuf2->size());
         streamsize n_read = zs.gcount();
 
-        CHECK(n_read == strlen(Text::s_text) + 1);
+        CHECK(n_read == static_cast<streamsize>(strlen(Text::s_text) + 1));
 
         cerr << "uncompressed input:" << endl;
         cerr << string_view(&((*ucbuf2)[0]), &((*ucbuf2)[n_read])) << endl;
 
-        for (size_t i=0; i<n_read-1; ++i) {
+        for (streamsize i=0; i<n_read-1; ++i) {
             INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", ucbuf2[i]=", (*ucbuf2)[i]));
 
             REQUIRE(Text::s_text[i] == (*ucbuf2)[i]);

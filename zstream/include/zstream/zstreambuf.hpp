@@ -189,7 +189,7 @@ protected:
              *
              * note this implies we always have whole-number-of-CharT in .uc_contents
              */
-            if (in_zs_.uc_avail().empty() || (n < zspan.size()))
+            if (in_zs_.uc_avail().empty() || (n < static_cast<std::streamsize>(zspan.size())))
                 break;
         }
 
@@ -299,7 +299,7 @@ private:
             out_zs_.deflate_chunk(final_flag);
             auto zspan = out_zs_.z_contents();
 
-            if (nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()), zspan.size()) < zspan.size())
+            if (nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()), zspan.size()) < static_cast<std::streamsize>(zspan.size()))
                 throw std::runtime_error("zstreambuf::sync_impl: partial write!");
 
             out_zs_.z_consume(zspan);
