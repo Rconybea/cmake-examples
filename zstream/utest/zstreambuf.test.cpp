@@ -24,14 +24,11 @@ operator<< (ostream & os, text_compare const & x) {
     size_t i = 0;
 
     while (i < n) {
-        size_t line = std::min(i + 50, n);
-
         os << i << ": ";
 
         /* print all of s1(i .. i+99) */
-        size_t i1 = i;
         size_t line1 = std::min(i + 50, n1);
-        for (; i1 < line1; ++i1) {
+        for (size_t i1 = i; i1 < line1; ++i1) {
             if (isprint(x.s1_[i1]))
                 os << x.s1_[i1];
             else
@@ -42,7 +39,6 @@ operator<< (ostream & os, text_compare const & x) {
         os << i << ": ";
 
         /* print s2(i) only when != s1(i) */
-        size_t i2 = i;
         size_t line2 = std::min(i + 50, n2);
         for (size_t i2 = i; i2 < line2; ++i2) {
             if (i2 < line1 && (x.s2_[i2] == x.s1_[i2]))
@@ -120,7 +116,7 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
 
         for (size_t i=0, n=strlen(Text::s_text); i<n;) {
             size_t nreq = std::min(c_write_z, n-i);
-            REQUIRE(ogbuf->sputn(Text::s_text + i, nreq) == nreq);
+            REQUIRE(ogbuf->sputn(Text::s_text + i, nreq) == static_cast<streamsize>(nreq));
 
             i += nreq;
         }

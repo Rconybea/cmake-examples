@@ -5,6 +5,12 @@
 #include "zstreambuf.hpp"
 #include <iostream>
 
+/* note: We want to allow out-of-memory-order initialization here.
+ *       1. We (presumably) must initialize .rdbuf before passing it to basic_iostream's ctor
+ *       2. Since we inherit basic_iostream,  its memory will precede .rdbuf
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreorder"
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstream : public std::basic_iostream<CharT, Traits> {
 public:
@@ -17,7 +23,8 @@ public:
 
 public:
     basic_zstream(std::streamsize buf_z, std::unique_ptr<std::streambuf> native_sbuf)
-        : rdbuf_(buf_z, std::move(native_sbuf)),
+        :
+          rdbuf_(buf_z, std::move(native_sbuf)),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
            {}
     ~basic_zstream() = default;
@@ -49,6 +56,7 @@ public:
 private:
     basic_zstreambuf<CharT, Traits> rdbuf_;
 }; /*basic_zstream*/
+#pragma GCC diagnostic pop
 
 using zstream = basic_zstream<char>;
 
