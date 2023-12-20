@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+
+srcdir=$1
+builddir=$2
+outputstem=$3
+
+if [[ -z "${srcdir}" ]]; then
+    echo "lcov-harness: expected non-empty srcdir"
+    exit 1
+fi
+
+if [[ -z ${builddir} ]]; then
+    echo "lcov-harness: expected non-empty builddir"
+    exit 1
+fi
+
+if [[ -z ${outputstem} ]]; then
+    echo "lcov-harness: expected non-empty outputstem"
+    exit 1
+fi
+
+# directory stems for location of {.gcda, gcno} coverage information,
+#
+# if we have source tree:
+#
+#   ${srcdir}
+#   +- foo
+#   |  \- foo.cpp
+#   \- bar
+#      \- quux
+#         +- quux.cpp
+#         \- quux_main.cpp
+#
+# then we expect build tree:
+#
+#   ${builddir}
+#   +- foo
+#   |  \- CMakeFiles
+#   |     \- foo_target.dir
+#   |        +- foo.cpp.gcda
+#   |        \- foo.cpp.gcno
+#   +- bar
+#      \- quux
+#         \- CMakeFiles
+#            \- target4quux.dir
+#               +- quux.cpp.gcda
+#               +- quux.cpp.gcno
+#               +- quux_main.cpp.gcda
+#               \- quux_main.cpp.gcno
+#
+# in which case will have cmd_body:
+#
+#   ${primarydirs}
+#      ./foo/CMakeFiles/foo_target.dir
+#      ./bar/quux/CMakeFiles/target4quux.dir
+#
+# here foo_target, quux_target are whatever build is using for corresponding cmake target names.
+#
+# We want to invoke lcov like:
+#
+#   lcov --capture \
+#        --output ${builddir}/ccov \
+#        --exclude /utest/ \
+#        --base-directory ${srcdir}/foo --directory ${builddir}/foo/CMakeFiles/foo_target.dir \
+#        --base-directory ${srcdir}/bar/quux --directory ${builddir}/bar/quux/CMakeFiles/target4quux.dir
+#
+primarydirs=$(cd ${builddir} && find -name '*.gcno' \
+                  | xargs --replace=xx dirname xx \
+                  | uniq \
+                  | sed -e 's:^\./::')
+
+#echo "primarydirs=${primarydirs}"
+
+cmd="lcov --output ${outputstem}.info --capture --ignore-errors source"
+
+for bdir in ${primarydirs}; do
+    #echo "bdir=$bdir"
+    sdir=$(dirname $(dirname ${bdir}))
+
+    # erk.  will be under target name
+    cmd="${cmd} --base-directory ${srcdir}/${sdir} --directory ${builddir}/${bdir}"
+done
+
+#echo cmd=${cmd}
+
+set -x
+
+# capture
+${cmd}
+
+# keep files with paths under source tree
+lcov --extract ${outputstem}.info "${srcdir}/*" --output ${outputstem}2.info
+
+# remove unit test dirs
+lcov --remove ${outputstem}2.info '*/utest/*' --output ${outputstem}3.info
+
+# generate .html tree
+mkdir -p ${builddir}/ccov/html
+genhtml --ignore-errors source --show-details --prefix ${srcdir} --output-directory ${builddir}/ccov/html ${outputstem}3.info
+
+# also send report to stdout
+lcov --list ${outputstem}3.info

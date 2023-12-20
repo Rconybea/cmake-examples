@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+srcdir=@PROJECT_SOURCE_DIR@
+builddir=@PROJECT_BINARY_DIR@
+
+mkdir $builddir/ccov
+
+$srcdir/cmake/lcov-harness $srcdir $builddir $builddir/ccov/out

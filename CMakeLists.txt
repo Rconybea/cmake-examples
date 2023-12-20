@@ -64,6 +64,34 @@ message("-- PROJECT_CXX_FLAGS_RELEASE: release c++ flags are [${PROJECT_CXX_FLAG
 add_compile_options("$<$<CONFIG:RELEASE>:${PROJECT_CXX_FLAGS_RELEASE}>")
 
 # ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=coverage
+
+if (NOT DEFINED PROJECT_CXX_FLAGS_COVERAGE)
+    # note: for clang would use -fprofile-instr-generate -fcoverage-mapping here instead and also at link time
+    set(PROJECT_CXX_FLAGS_COVERAGE ${PROJECT_CXX_FLAGS} -ggdb -Og -fprofile-arcs -ftest-coverage
+        CACHE STRING "coverage c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_COVERAGE: coverage c++ flags are [${PROJECT_CXX_FLAGS_COVERAGE}]")
+
+add_compile_options("$<$<CONFIG:COVERAGE>:${PROJECT_CXX_FLAGS_COVERAGE}>")
+# link executables with gcov
+link_libraries("$<$<CONFIG:COVERAGE>:gcov>")
+
+# with coverage build:
+# 1. invoke instrumented executables for which you want coverage:
+#     (cd path/to/build && ctest)
+# 2. post-process low-level coverage data
+#     (path/to/build/gen-ccov)
+# 3. point browser to generated html data
+#     file:///path/to/build/ccov/html/index.html
+#
+configure_file(
+    ${PROJECT_SOURCE_DIR}/cmake/gen-ccov.in
+    ${PROJECT_BINARY_DIR}/gen-ccov)
+
+file(CHMOD ${PROJECT_BINARY_DIR}/gen-ccov PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+
+# ----------------------------------------------------------------
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "generate build/compile_commands.json")
 
