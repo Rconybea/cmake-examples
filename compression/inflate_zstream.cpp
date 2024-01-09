@@ -24,11 +24,6 @@ inflate_zstream::~inflate_zstream() {
     ::inflateEnd(&zstream_);
 }
 
-std::streamsize
-inflate_zstream::inflate_chunk() {
-    return this->inflate_chunk2().second.size();
-}
-
 std::pair<span<std::uint8_t>, span<std::uint8_t>>
 inflate_zstream::inflate_chunk2() {
     /* Z = compressed data

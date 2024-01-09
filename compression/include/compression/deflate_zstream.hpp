@@ -8,6 +8,10 @@
 #include <ios>
 #include <cstring>
 
+/* accept input and compress (aka deflate).
+ * customer is responsible for providing input+output buffer space.
+ * can use buffered_deflate_zstream to provision buffer space.
+ */
 class deflate_zstream : public base_zstream {
 public:
     using span_type = span<std::uint8_t>;
