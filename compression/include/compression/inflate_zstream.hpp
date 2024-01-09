@@ -19,10 +19,12 @@ public:
     inflate_zstream();
     ~inflate_zstream();
 
-    /* .first  = span for compressed bytes consumed
+    /* uncompress some input.
+     *
+     * .first  = span for compressed bytes consumed
      * .second = span for uncompressed bytes produced
      */
-    std::pair<span_type, span_type> inflate_chunk2();
+    std::pair<span_type, span_type> inflate_chunk();
 
     void swap (inflate_zstream & x) {
         base_zstream::swap(x);

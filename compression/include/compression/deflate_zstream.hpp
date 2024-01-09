@@ -24,13 +24,11 @@ public:
      *
      * final_flag.  must set to true end of uncompressed input reached,
      *              so that .zstream knows to flush compressed state
-     */
-    std::streamsize deflate_chunk(bool final_flag);
-
-    /* .first = span for uncompressed bytes consumed
+     *
+     * .first = span for uncompressed bytes consumed
      * .second = span for compressed bytes produced
      */
-    std::pair<span_type, span_type> deflate_chunk2(bool final_flag);
+    std::pair<span_type, span_type> deflate_chunk(bool final_flag);
 
     void swap(deflate_zstream & x) {
         base_zstream::swap(x);
