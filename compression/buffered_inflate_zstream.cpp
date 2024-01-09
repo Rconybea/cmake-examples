@@ -8,7 +8,7 @@ auto
 buffered_inflate_zstream::inflate_chunk() -> size_type
 {
     if (zs_algo_.have_input()) {
-        std::pair<z_span_type, z_span_type> x = zs_algo_.inflate_chunk2();
+        std::pair<z_span_type, z_span_type> x = zs_algo_.inflate_chunk();
 
         z_in_buf_.consume(x.first);
         uc_out_buf_.produce(x.second);

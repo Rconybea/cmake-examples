@@ -24,13 +24,8 @@ deflate_zstream::~deflate_zstream() {
     ::deflateEnd(&zstream_);
 }
 
-streamsize
-deflate_zstream::deflate_chunk(bool final_flag) {
-    return this->deflate_chunk2(final_flag).second.size();
-} /*deflate_chunk*/
-
 pair<span<uint8_t>, span<uint8_t>>
-deflate_zstream::deflate_chunk2(bool final_flag) {
+deflate_zstream::deflate_chunk(bool final_flag) {
     /* U = uncompressed data
      * Z = compressed   data
      *
