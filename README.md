@@ -41,17 +41,17 @@ and to provide an opinionated (though possibly flawed) version of best practice
 12. ex12: refactor: use inflate/deflate (streaming) api for non-native solution
 13. ex13: example c++ header-only library A2 (`zstream`) with A2 -> A1 -> O2, monorepo-style
 14. ex14: github CI example
+15. ex15: add unit test code coverage (using `gcov` and `lcov`)
 
-* ex15: find_package() support
 * ex16: add pybind11 library (pyzstream)
-* ex17: add sphinx doc
+* ex17: provide cmake find_package() support with installs of our example codebase
+* ex18: add sphinx doc
 
 * c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
 * project-specific macros - simplify
 * project-specific macros - support (monorepo, separable) builds from same tree
 * add performance benchmarks.
-* add code coverage.
 
 - monorepo-style: artifacts using dependencies supplied from same repo and build tree
 
@@ -4079,3 +4079,312 @@ Remarks:
 4. We can achieve a fully-reproducible CI pipeline by containerizing.
    See `.github/workflows/main.yml` in https://github.com/rconybea/xo-nix3 for github CI workflow using a custom docker container.
    See https://github.com/rconybea/docker-xo-builder for construction of the docker container
+
+# Example 15
+
+Provide unit test coverage.
+We will use gcov and lcov.
+
+```
+$ cd cmake-examples
+$ git switch ex15
+```
+
+source tree
+```
+$ tree
+.
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── app
+│   ├── hello
+│   │   ├── CMakeLists.txt
+│   │   └── hello.cpp
+│   └── myzip
+│       ├── CMakeLists.txt
+│       ├── myzip.cpp
+│       └── utest
+│           ├── CMakeLists.txt
+│           ├── myzip.utest
+│           └── textfile
+├── cmake
+│   ├── gen-ccov.in
+│   └── lcov-harness
+├── compile_commands.json -> build/compile_commands.json
+├── compression
+│   ├── CMakeLists.txt
+│   ├── buffered_deflate_zstream.cpp
+│   ├── buffered_inflate_zstream.cpp
+│   ├── compression.cpp
+│   ├── deflate_zstream.cpp
+│   ├── include
+│   │   └── compression
+│   │       ├── base_zstream.hpp
+│   │       ├── buffer.hpp
+│   │       ├── buffered_deflate_zstream.hpp
+│   │       ├── buffered_inflate_zstream.hpp
+│   │       ├── compression.hpp
+│   │       ├── deflate_zstream.hpp
+│   │       ├── inflate_zstream.hpp
+│   │       ├── span.hpp
+│   │       └── tostr.hpp
+│   ├── inflate_zstream.cpp
+│   └── utest
+│       ├── CMakeLists.txt
+│       ├── compression.test.cpp
+│       └── compression_utest_main.cpp
+└── zstream
+    ├── CMakeLists.txt
+    ├── include
+    │   └── zstream
+    │       ├── zstream.hpp
+    │       └── zstreambuf.hpp
+    └── utest
+        ├── CMakeLists.txt
+        ├── text.cpp
+        ├── text.hpp
+        ├── zstream.test.cpp
+        ├── zstream_utest_main.cpp
+        └── zstreambuf.test.cpp
+
+13 directories, 40 files
+```
+
+Changes:
+1. in toplevel `CMakeLists.txt` provide default compile flags for configuration `COVERAGE`.
+   (configuration activates with `cmake -DCMAKE_BUILD_TYPE=coverage ...`)
+2. when building under the `COVERAGE` configuration, executable targets will need to link with the `gcov` library.
+3. locate `lcov` and `genhtml` executables
+4. scripts to post-process coverage information.
+   We split this into:
+   - a cmake template (`gen-ccov.in`) to transfer configuration variables from cmake to shell
+   - a worker script (`lcov-harness`) to collect and tidy gcov-generated data sets,  then forward to `lcov`.
+
+in `cmake-examples/CMakeLists.txt`:
+
+compile flags (in toplevel `CMakeLists.txt`)
+```
+# ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=coverage
+
+if (NOT DEFINED PROJECT_CXX_FLAGS_COVERAGE)
+    # note: for clang would use -fprofile-instr-generate -fcoverage-mapping here instead and also at link time
+    set(PROJECT_CXX_FLAGS_COVERAGE ${PROJECT_CXX_FLAGS} -ggdb -Og -fprofile-arcs -ftest-coverage
+        CACHE STRING "coverage c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_COVERAGE: coverage c++ flags are [${PROJECT_CXX_FLAGS_COVERAGE}]")
+
+add_compile_options("$<$<CONFIG:COVERAGE>:${PROJECT_CXX_FLAGS_COVERAGE}>")
+```
+
+conditionally link `gcov` (in toplevel `CMakeLists.txt`)
+```
+# when -DCMAKE_BUILD_TYPE=coverage, link executables with gcov
+link_libraries("$<$<CONFIG:COVERAGE>:gcov>")
+```
+
+locate `lcov` and `genhtml` (in toplevel `CMakeLists.txt`)
+```
+find_program(LCOV_EXECUTABLE NAMES lcov)
+find_program(GENHTML_EXECUTABLE NAMES genhtml)
+```
+
+generate wrapper script `path/to/build/gen-ccov`
+```
+# with coverage build:
+# 1. invoke instrumented executables for which you want coverage:
+#     (cd path/to/build && ctest)
+# 2. post-process low-level coverage data
+#     (path/to/build/gen-ccov)
+# 3. point browser to generated html data
+#     file:///path/to/build/ccov/html/index.html
+#
+configure_file(
+    ${PROJECT_SOURCE_DIR}/cmake/gen-ccov.in
+    ${PROJECT_BINARY_DIR}/gen-ccov)
+
+file(CHMOD ${PROJECT_BINARY_DIR}/gen-ccov
+     PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+```
+
+script template `cmake/gen-ccov.in`:
+```
+#!/usr/bin/env bash
+
+srcdir=@PROJECT_SOURCE_DIR@
+builddir=@PROJECT_BINARY_DIR@
+lcov=@LCOV_EXECUTABLE@
+genhtml=@GENHTML_EXECUTABLE@
+
+if [[ $lcov == "LCOV_EXECUTABLE-NOTFOUND" ]]; then
+    echo "gen-ccov: lcov executable not found"
+    exit 1
+fi
+
+if [[ $genhtml == "GENHTML_EXECUTABLE-NOTFOUND" ]]; then
+    echo "gen-ccov: genhtml executable not found"
+    exit 1
+fi
+
+mkdir $builddir/ccov
+
+$srcdir/cmake/lcov-harness $srcdir $builddir $builddir/ccov/out $lcov $genhtml
+```
+
+worker script `cmake/lcov-harness`,  invoked by `gen-ccov`:
+```
+#!/usr/bin/env bash
+
+srcdir=$1
+builddir=$2
+outputstem=$3
+lcov=$4
+genhtml=$5
+
+if [[ -z "${srcdir}" ]]; then
+    echo "lcov-harness: expected non-empty srcdir"
+    exit 1
+fi
+
+if [[ -z ${builddir} ]]; then
+    echo "lcov-harness: expected non-empty builddir"
+    exit 1
+fi
+
+if [[ -z ${outputstem} ]]; then
+    echo "lcov-harness: expected non-empty outputstem"
+    exit 1
+fi
+
+if [[ -z ${lcov} ]]; then
+    echo "lcov-harness: exepcted non-empty lcov"
+    exit 1
+fi
+
+if [[ -z ${genhtml} ]]; then
+    echo "lcov-harness: expected non-empty genhtml"
+    exit 1
+fi
+
+# directory stems for location of {.gcda, gcno} coverage information,
+#
+# if we have source tree:
+#
+#   ${srcdir}
+#   +- foo
+#   |  \- foo.cpp
+#   \- bar
+#      \- quux
+#         +- quux.cpp
+#         \- quux_main.cpp
+#
+# then we expect build tree:
+#
+#   ${builddir}
+#   +- foo
+#   |  \- CMakeFiles
+#   |     \- foo_target.dir
+#   |        +- foo.cpp.gcda
+#   |        \- foo.cpp.gcno
+#   +- bar
+#      \- quux
+#         \- CMakeFiles
+#            \- target4quux.dir
+#               +- quux.cpp.gcda
+#               +- quux.cpp.gcno
+#               +- quux_main.cpp.gcda
+#               \- quux_main.cpp.gcno
+#
+# in which case will have cmd_body:
+#
+#   ${primarydirs}
+#      ./foo/CMakeFiles/foo_target.dir
+#      ./bar/quux/CMakeFiles/target4quux.dir
+#
+# here foo_target, quux_target are whatever build is using for corresponding cmake target names.
+#
+# We want to invoke lcov like:
+#
+#   lcov --capture \
+#        --output ${builddir}/ccov \
+#        --exclude /utest/ \
+#        --base-directory ${srcdir}/foo --directory ${builddir}/foo/CMakeFiles/foo_target.dir \
+#        --base-directory ${srcdir}/bar/quux --directory ${builddir}/bar/quux/CMakeFiles/target4quux.dir
+#
+primarydirs=$(cd ${builddir} && find -name '*.gcno' \
+                  | xargs --replace=xx dirname xx \
+                  | uniq \
+                  | sed -e 's:^\./::')
+
+#echo "primarydirs=${primarydirs}"
+
+cmd="${lcov} --output ${outputstem}.info --capture --ignore-errors source"
+
+for bdir in ${primarydirs}; do
+    sdir=$(dirname $(dirname ${bdir}))
+
+    cmd="${cmd} --base-directory ${srcdir}/${sdir} --directory ${builddir}/${bdir}"
+done
+
+#echo cmd=${cmd}
+
+set -x
+
+# capture
+${cmd}
+
+# keep only files with paths under source tree
+# (don't want coverage for external libraries such as libstdc++ etc)
+${lcov} --extract ${outputstem}.info "${srcdir}/*" --output ${outputstem}2.info
+
+# remove unit test dirs
+# (we're interested in coverage of our installed code,  not of the unit tests that exercise it)
+${lcov} --remove ${outputstem}2.info '*/utest/*' --output ${outputstem}3.info
+
+# generate .html tree
+mkdir -p ${builddir}/ccov/html
+${genhtml} --ignore-errors source --show-details --prefix ${srcdir} --output-directory ${builddir}/ccov/html ${outputstem}3.info
+
+# also send report to stdout
+${lcov} --list ${outputstem}3.info
+```
+
+To build with code coverage enabled:
+```
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=coverage -B build_coverage
+$ cmake --build build_coverage -j
+$ (cd build_coverage && ctest)    # run instrument tests to generate coverage data
+$ ./build_coverage/gen-ccov       # collect + post-process coverage data, generate html tree in ./build_ccov/ccov
+...
++ lcov --list /home/roland/proj/cmake-examples/build_coverage/ccov/out3.info
+Reading tracefile /home/roland/proj/cmake-examples/build_coverage/ccov/out3.info
+                                               |Lines      |Functions|Branches
+Filename                                       |Rate    Num|Rate  Num|Rate   Num
+================================================================================
+[/home/roland/proj/cmake-examples/app/myzip/]
+myzip.cpp                                      |85.7%    35| 100%   1|    -    0
+
+[/home/roland/proj/cmake-examples/compression/]
+buffered_deflate_zstream.cpp                   | 100%     5| 100%   1|    -    0
+buffered_inflate_zstream.cpp                   | 100%     5| 100%   1|    -    0
+compression.cpp                                |75.7%    74| 100%   4|    -    0
+deflate_zstream.cpp                            |85.2%    27|75.0%   4|    -    0
+include/compression/base_zstream.hpp           |92.3%    13| 100%   1|    -    0
+include/compression/buffer.hpp                 |96.7%    30| 100%   3|    -    0
+include/compression/bu...ed_deflate_zstream.hpp| 100%    18| 100%   5|    -    0
+include/compression/bu...ed_inflate_zstream.hpp|95.0%    20| 100%   7|    -    0
+include/compression/span.hpp                   | 100%     6|    -   0|    -    0
+include/compression/tostr.hpp                  | 100%     9|43.2%  44|    -    0
+inflate_zstream.cpp                            |76.7%    30|75.0%   4|    -    0
+
+[/home/roland/proj/cmake-examples/zstream/include/zstream/]
+zstream.hpp                                    | 100%     7|66.7%   3|    -    0
+zstreambuf.hpp                                 |81.3%    75|90.0%  10|    -    0
+================================================================================
+                                         Total:|85.6%   354|67.0%  88|    -    0
+```
+
+For browseable dataset cross-correlated with source code,
+point web browser to `file:///path/to/build_coverage/ccov/html/index.html`
