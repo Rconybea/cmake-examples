@@ -7,6 +7,10 @@
 #include <ios>
 #include <cstring>
 
+/* accept input and uncompress (aka inflate).
+ * customer is responsible for providing input+output buffer space.
+ * can use buffered_inflate_zstream to provision buffer space.
+ */
 class inflate_zstream : public base_zstream {
 public:
     using span_type = span<std::uint8_t>;
@@ -14,9 +18,6 @@ public:
 public:
     inflate_zstream();
     ~inflate_zstream();
-
-    /* decompress some input,  return #of uncompressed bytes obtained */
-    std::streamsize inflate_chunk();
 
     /* .first  = span for compressed bytes consumed
      * .second = span for uncompressed bytes produced

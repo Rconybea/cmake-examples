@@ -2,7 +2,7 @@
 
 #include "deflate_zstream.hpp"
 
-/* accept input (of type CharT) and compress (aka deflatee).
+/* accept input and compress (aka deflatee).
  * provides buffer for both uncompressed input and compressed output
  *
  * Example
