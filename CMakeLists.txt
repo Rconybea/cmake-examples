@@ -74,7 +74,7 @@ endif()
 message("-- PROJECT_CXX_FLAGS_COVERAGE: coverage c++ flags are [${PROJECT_CXX_FLAGS_COVERAGE}]")
 
 add_compile_options("$<$<CONFIG:COVERAGE>:${PROJECT_CXX_FLAGS_COVERAGE}>")
-# link executables with gcov
+# when -DCMAKE_BUILD_TYPE=coverage, link executables with gcov
 link_libraries("$<$<CONFIG:COVERAGE>:gcov>")
 
 find_program(LCOV_EXECUTABLE NAMES lcov)
