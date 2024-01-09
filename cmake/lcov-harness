@@ -3,6 +3,8 @@
 srcdir=$1
 builddir=$2
 outputstem=$3
+lcov=$4
+genhtml=$5
 
 if [[ -z "${srcdir}" ]]; then
     echo "lcov-harness: expected non-empty srcdir"
@@ -16,6 +18,16 @@ fi
 
 if [[ -z ${outputstem} ]]; then
     echo "lcov-harness: expected non-empty outputstem"
+    exit 1
+fi
+
+if [[ -z ${lcov} ]]; then
+    echo "lcov-harness: exepcted non-empty lcov"
+    exit 1
+fi
+
+if [[ -z ${genhtml} ]]; then
+    echo "lcov-harness: expected non-empty genhtml"
     exit 1
 fi
 
@@ -71,13 +83,11 @@ primarydirs=$(cd ${builddir} && find -name '*.gcno' \
 
 #echo "primarydirs=${primarydirs}"
 
-cmd="lcov --output ${outputstem}.info --capture --ignore-errors source"
+cmd="${lcov} --output ${outputstem}.info --capture --ignore-errors source"
 
 for bdir in ${primarydirs}; do
-    #echo "bdir=$bdir"
     sdir=$(dirname $(dirname ${bdir}))
 
-    # erk.  will be under target name
     cmd="${cmd} --base-directory ${srcdir}/${sdir} --directory ${builddir}/${bdir}"
 done
 
@@ -88,15 +98,17 @@ set -x
 # capture
 ${cmd}
 
-# keep files with paths under source tree
-lcov --extract ${outputstem}.info "${srcdir}/*" --output ${outputstem}2.info
+# keep only files with paths under source tree
+# (don't want coverage for external libraries such as libstdc++ etc)
+${lcov} --extract ${outputstem}.info "${srcdir}/*" --output ${outputstem}2.info
 
 # remove unit test dirs
-lcov --remove ${outputstem}2.info '*/utest/*' --output ${outputstem}3.info
+# (we're interested in coverage of our installed code,  not of the unit tests that exercise it)
+${lcov} --remove ${outputstem}2.info '*/utest/*' --output ${outputstem}3.info
 
 # generate .html tree
 mkdir -p ${builddir}/ccov/html
-genhtml --ignore-errors source --show-details --prefix ${srcdir} --output-directory ${builddir}/ccov/html ${outputstem}3.info
+${genhtml} --ignore-errors source --show-details --prefix ${srcdir} --output-directory ${builddir}/ccov/html ${outputstem}3.info
 
 # also send report to stdout
-lcov --list ${outputstem}3.info
+${lcov} --list ${outputstem}3.info

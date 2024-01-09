@@ -77,6 +77,9 @@ add_compile_options("$<$<CONFIG:COVERAGE>:${PROJECT_CXX_FLAGS_COVERAGE}>")
 # link executables with gcov
 link_libraries("$<$<CONFIG:COVERAGE>:gcov>")
 
+find_program(LCOV_EXECUTABLE NAMES lcov)
+find_program(GENHTML_EXECUTABLE NAMES genhtml)
+
 # with coverage build:
 # 1. invoke instrumented executables for which you want coverage:
 #     (cd path/to/build && ctest)

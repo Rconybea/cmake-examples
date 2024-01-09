@@ -2,7 +2,19 @@
 
 srcdir=@PROJECT_SOURCE_DIR@
 builddir=@PROJECT_BINARY_DIR@
+lcov=@LCOV_EXECUTABLE@
+genhtml=@GENHTML_EXECUTABLE@
+
+if [[ $lcov == "LCOV_EXECUTABLE-NOTFOUND" ]]; then
+    echo "gen-ccov: lcov executable not found"
+    exit 1
+fi
+
+if [[ $genhtml == "GENHTML_EXECUTABLE-NOTFOUND" ]]; then
+    echo "gen-ccov: genhtml executable not found"
+    exit 1
+fi
 
 mkdir $builddir/ccov
 
-$srcdir/cmake/lcov-harness $srcdir $builddir $builddir/ccov/out
+$srcdir/cmake/lcov-harness $srcdir $builddir $builddir/ccov/out $lcov $genhtml
