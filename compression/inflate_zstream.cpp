@@ -25,7 +25,7 @@ inflate_zstream::~inflate_zstream() {
 }
 
 std::pair<span<std::uint8_t>, span<std::uint8_t>>
-inflate_zstream::inflate_chunk2() {
+inflate_zstream::inflate_chunk () {
     /* Z = compressed data
      * U = uncompressed   data
      *
