@@ -42,6 +42,7 @@ and to provide an opinionated (though possibly flawed) version of best practice
 13. ex13: example c++ header-only library A2 (`zstream`) with A2 -> A1 -> O2, monorepo-style
 14. ex14: github CI example
 15. ex15: add unit test code coverage (using `gcov` and `lcov`)
+16. ex16: add performance benchmarks (as provided by `catch2`)
 
 * ex16: add pybind11 library (pyzstream)
 * ex17: provide cmake find_package() support with installs of our example codebase
@@ -4388,3 +4389,177 @@ zstreambuf.hpp                                 |81.3%    75|90.0%  10|    -    0
 
 For browseable dataset cross-correlated with source code,
 point web browser to `file:///path/to/build_coverage/ccov/html/index.html`
+
+# Example 16
+
+Add a performance benchmark.   This relies on `catch2`'s builtin functionality.
+
+```
+$ cd cmake-examples
+$ git switch ex16
+```
+
+source tree as per preceding example
+
+Changes:
+1. in `compression.test.cpp` and `compression_utest_main.cpp`,  enable catch2 benchmarking:
+   ```
+   #define CATCH_CONFIG_ENABLE_BENCHMARKING
+   ```
+2. in `compression/utest/compression.test.cpp`,  add benchmark
+3. in `compression/utest/CMakeLists.txt` setup benchmark invocation.
+
+In `compression.test.cpp`:
+
+```
+namespace {
+    void compression_benchmark(char const * deflate_name,
+                               char const * inflate_name,
+                               size_t problem_size)
+    {
+        constexpr size_t i_tc = 2;
+        size_t og_data_z = 0;
+        vector<uint8_t> og_data_v;
+        vector<uint8_t> z_data_v;
+
+        BENCHMARK_ADVANCED(deflate_name)(Catch::Benchmark::Chronometer clock) {
+            /* 1. setup */
+
+            size_t text_z = s_testcase_v[i_tc].og_text.size();
+
+            /* test string comprising consecutive copies of test pattern */
+            og_data_z = problem_size;
+            og_data_v.reserve(og_data_z);
+
+            for (size_t i_copy = 0; i_copy * text_z < problem_size; ++i_copy) {
+                size_t i_start = i_copy * text_z;
+                size_t i_end   = std::min((i_copy + 1) * text_z, problem_size);
+
+                std::copy(s_testcase_v[i_tc].og_text.begin(),
+                          s_testcase_v[i_tc].og_text.begin() + (i_end - i_start),
+                          og_data_v.begin() + i_start);
+            }
+
+            /* 2. run */
+
+            clock.measure([&og_data_v, &z_data_v] {
+                z_data_v = compression::deflate(og_data_v);
+
+                return z_data_v.size();  /* just to make sure optimizer doesn't interfere */
+            });
+        };
+
+        vector<uint8_t> og_data2_v;
+
+        BENCHMARK(inflate_name) {
+            og_data2_v = compression::inflate(z_data_v, og_data_z);
+
+            return og_data2_v.size();
+        };
+
+        REQUIRE(og_data_v == og_data2_v);
+    }
+}
+
+TEST_CASE("compression-benchmark", "[!benchmark]") {
+    compression_benchmark("deflate-128k", "inflate-128k", 128*1024);
+    compression_benchmark("deflate-1m", "inflate-1m", 1024*1024);
+    compression_benchmark("deflate-10m", "inflate-10m", 10*1024*1024);
+    compression_benchmark("deflate-128m", "inflate-128m", 128*1024*1024);
+    compression_benchmark("deflate-1g", "inflate-1g", 1024*1024*1024);
+}
+```
+
+Remarks:
+1. The `[!benchmark]` argument to `TEST_CASE()` is special.
+   It tells `catch2` to treat the `compression-benchmark` test as disabled.
+2. To restore the benchmark,  need:
+   ```
+   ./build/compression/utest/utest.compression '~[benchmark]'
+   ```
+3. This will run the `compression-benchmark` test,
+   along with any other tests using the `[!benchmark]` tag.
+
+In `compression/utest/CMakeLists.txt`,  setup separate pathway for invoking our `utest.compression` benchmark:
+```
+set(SELF_BENCHMARK benchmark.compression)
+...
+add_test(
+    NAME ${SELF_BENCHMARK}
+    COMMAND ${SELF_UTEST} ~[benchmark] --benchmark-no-analysis --benchmark-samples 1)
+set_tests_properties(${SELF_BENCHMARK} PROPERTIES LABELS "benchmark")
+```
+
+To run unit tests (with benchmarks excluded):
+```
+$ cd cmake-examples/build
+$ ctest -E benchmark
+Test project /home/roland/proj/cmake-examples/build
+    Start 1: utest.compression
+1/3 Test #1: utest.compression ................   Passed    0.00 sec
+    Start 2: utest.zstream
+2/3 Test #2: utest.zstream ....................   Passed    0.04 sec
+    Start 3: myzip.utest
+3/3 Test #3: myzip.utest ......................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Total Test time (real) =   0.05 sec
+```
+
+To run benchmarks:
+```
+$ cd cmake-examples/build
+$ ctest -L benchmark --verbose   # need verbose to get benchmark output on console
+UpdateCTestConfiguration  from :/home/roland/proj/cmake-examples/build/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/home/roland/proj/cmake-examples/build/DartConfiguration.tcl
+Test project /home/roland/proj/cmake-examples/build
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 2
+    Start 2: benchmark.compression
+
+2: Test command: /home/roland/proj/cmake-examples/build/compression/utest/utest.compression "~[benchmark]" "--benchmark-no-analysis" "--benchmark-samples" "1"
+2: Working Directory: /home/roland/proj/cmake-examples/build/compression/utest
+2: Test timeout computed to be: 10000000
+2: Filters: ~[benchmark]
+2:
+2: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2: utest.compression is a Catch v2.13.10 host application.
+2: Run with -? for options
+2:
+2: -------------------------------------------------------------------------------
+2: compression-benchmark
+2: -------------------------------------------------------------------------------
+2: /home/roland/proj/cmake-examples/compression/utest/compression.test.cpp:127
+2: ...............................................................................
+2:
+2: benchmark name                            samples    iterations          mean
+2: -------------------------------------------------------------------------------
+2: deflate-128k                                     1            14    2.47621 us
+2: inflate-128k                                     1            20     2.3415 us
+2: deflate-1m                                       1            13    2.64892 us
+2: inflate-1m                                       1             2    89.8385 us
+2: deflate-10m                                      1            14    2.63143 us
+2: inflate-10m                                      1             1     766.34 us
+2: deflate-128m                                     1            14      2.741 us
+2: inflate-128m                                     1             1     13.658 ms
+2: deflate-1g                                       1            14    2.88914 us
+2: inflate-1g                                       1             1    256.041 ms
+2:
+2: ===============================================================================
+2: All tests passed (8 assertions in 2 test cases)
+2:
+1/1 Test #2: benchmark.compression ............   Passed   14.65 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+benchmark    =  14.65 sec*proc (1 test)
+
+Total Test time (real) =  14.65 sec
+```
