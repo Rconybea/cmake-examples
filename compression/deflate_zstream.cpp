@@ -14,7 +14,13 @@ deflate_zstream::deflate_zstream()
     zstream_.avail_out = 0;
     zstream_.next_out  = Z_NULL;
 
-    int ret = ::deflateInit(&zstream_, Z_DEFAULT_COMPRESSION);
+    //int ret = ::deflateInit(&zstream_, Z_DEFAULT_COMPRESSION);
+    int ret = ::deflateInit2(&zstream_,
+                             Z_DEFAULT_COMPRESSION,
+                             Z_DEFLATED,
+                             MAX_WBITS + 16 /* +16 tells zlib to write .gzip header*/,
+                             8 /*memlevel 1-9; higher to spend memory for more speed+compression. default=8*/,
+                             Z_DEFAULT_STRATEGY);
 
     if (ret != Z_OK)
         throw runtime_error("deflate_zstream: failed to initialize .zstream");
