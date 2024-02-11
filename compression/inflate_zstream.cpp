@@ -14,7 +14,9 @@ inflate_zstream::inflate_zstream() {
     zstream_.avail_out = 0;
     zstream_.next_out  = Z_NULL;
 
-    int ret = ::inflateInit(&zstream_);
+    //int ret = ::inflateInit(&zstream_);
+    int ret = ::inflateInit2(&zstream_,
+                             MAX_WBITS + 32 /* +32 tells zlib to detect zlib/gzip encoding + handle either*/);
 
     if (ret != Z_OK)
         throw std::runtime_error("inflate_zstream: failed to initialize .zstream");
