@@ -2252,7 +2252,7 @@ inflate_zstream::inflate_chunk2() {
         /* fallthru */
     case Z_DATA_ERROR:
     case Z_MEM_ERROR:
-        throw std::runtime_error(tostr("zstreambuf::inflate_chunk: error [", err, "] from zlib inflate"));
+        throw std::runtime_error(tostr("inflate_zstream::inflate_chunk: error [", err, "] from zlib inflate"));
     }
 
     uint8_t * z_post = zstream_.next_in;
@@ -2260,7 +2260,7 @@ inflate_zstream::inflate_chunk2() {
 
     return pair<span_type, span_type>(span_type(z_pre, z_post),
                                       span_type(uc_pre, uc_post));
-} /*inflate_chunk2*/
+}
 ```
 
 5. class `deflate_zstream`
