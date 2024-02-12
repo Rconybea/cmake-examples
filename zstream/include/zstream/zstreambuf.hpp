@@ -144,6 +144,11 @@ public:
         std::swap(native_sbuf_, x.native_sbuf_);
     }
 
+#  ifndef NDEBUG
+    /* control per-instance debug output */
+    void set_debug_flag(bool x) { debug_flag_ = x; }
+#  endif
+
 protected:
     /* estimates #of characters n available for input -- .underflow() will not be called
      * or throw exception until at least n chars are extracted.
@@ -165,6 +170,11 @@ protected:
     virtual int_type underflow() override final {
         /* control here: .input buffer (i.e. .in_zs.uc_input_buf) has been entirely consumed */
 
+#      ifndef NDEBUG
+        if (debug_flag_)
+            std::cerr << "zstreambuf::underflow: enter" << std::endl;
+#      endif
+
         std::streambuf * nsbuf = native_sbuf_.get();
 
         /* any previous output from .in_zs has already been consumed (otherwise not in underflow state) */
@@ -183,6 +193,11 @@ protected:
 
                 /* .in_zs needs to know how much we filled */
                 in_zs_.z_produce(zspan.prefix(n));
+
+#              ifndef NDEBUG
+                if(debug_flag_)
+                    std::cerr << "zstreambuf::underflow: read " << n << " compressed bytes (allowing space for " << zspan.size() << ")" << std::endl;
+#              endif
             } else {
                 /* it's possible previous inflate_chunk filled uncompressed output
                  * without consuming any compressed input,  in which case can have z_avail empty
@@ -225,7 +240,8 @@ protected:
     virtual int
     sync() override final {
 #      ifndef NDEBUG
-        std::cerr << "zstreambuf::sync: enter" << std::endl;
+        if (debug_flag_)
+            std::cerr << "zstreambuf::sync: enter" << std::endl;
 #      endif
 
         return this->sync_impl(false /*!final_flag*/);
@@ -237,8 +253,10 @@ protected:
     virtual std::streamsize
     xsputn(CharT const * s, std::streamsize n_arg) override final {
 #      ifndef NDEBUG
-        std::cerr << "zstreambuf::xsputn: enter" << std::endl;
-        std::cerr << hex_view(s, s+n_arg, true) << std::endl;
+        if (debug_flag_) {
+            std::cerr << "zstreambuf::xsputn: enter" << std::endl;
+            std::cerr << hex_view(s, s+n_arg, true) << std::endl;
+        }
 #      endif
 
         if (closed_flag_)
@@ -290,10 +308,13 @@ private:
      *
      * final_flag = true:  compressed stream is irrevocably complete -- no further output may be written
      * final_flag = false: after .sync_impl() returns may still have un-synced output in .output_zs
+     *
+     * TODO: sync for input (e.g. consider tailing a file)
      */
     int
     sync_impl(bool final_flag) {
 #      ifndef NDEBUG
+        if (debug_flag_)
         std::cerr << "zstreambuf::sync_impl: enter: :final_flag " << final_flag << std::endl;
 #      endif
 
@@ -404,6 +425,10 @@ private:
 
     /* i/o for compressed data */
     std::unique_ptr<std::streambuf> native_sbuf_;
+
+#  ifndef NDEBUG
+    bool debug_flag_ = false;
+#  endif
 }; /*basic_zstreambuf*/
 
 using zstreambuf = basic_zstreambuf<char>;

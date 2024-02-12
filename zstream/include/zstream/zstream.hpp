@@ -83,6 +83,10 @@ public:
         this->rdbuf_.close();
     }
 
+#  ifndef NDEBUG
+    void set_debug_flag(bool x) { rdbuf_.set_debug_flag(x); }
+#  endif
+
 private:
     basic_zstreambuf<CharT, Traits> rdbuf_;
 }; /*basic_zstream*/
