@@ -4,10 +4,31 @@
 
 #include "zstreambuf.hpp"
 #include <iostream>
+#include <fstream>
 
 /* note: We want to allow out-of-memory-order initialization here.
  *       1. We (presumably) must initialize .rdbuf before passing it to basic_iostream's ctor
  *       2. Since we inherit basic_iostream,  its memory will precede .rdbuf
+ *
+ * Example 1 (compress)
+ *
+ *   // zstream = basic_zstream<char>,  in this file following basic_zstream decl
+ *   zstream zs(64*1024, "path/to/foo.gz", ios::out);
+ *
+ *   zs << "some text to be compressed" << endl;
+ *
+ *   zs.close();
+ *
+ * Example 2 (uncompress)
+ *
+ *   zstream zs(64*1024, "path/to/foo.gz", ios::in);
+ *
+ *   while (!zs.eof()) {
+ *     std::string x;
+ *     zs >> x;
+ *
+ *     cout << "input: [" << x << "]" << endl;
+ *   }
  */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreorder"
@@ -27,6 +48,15 @@ public:
           rdbuf_(buf_z, std::move(native_sbuf)),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
            {}
+    /* convenience ctor;  creates filebuf attached to filename and opens it */
+    basic_zstream(std::streamsize buf_z,
+                  char const * filename,
+                  std::ios::openmode mode = std::ios::in)
+        : rdbuf_(buf_z,
+                 std::unique_ptr<std::streambuf>((new std::filebuf())->open(filename,
+                                                                            std::ios::binary | mode))),
+          std::basic_iostream<CharT, Traits>(&rdbuf_)
+        {}
     ~basic_zstream() = default;
 
     zstreambuf_type * rdbuf() { return &rdbuf_; }
