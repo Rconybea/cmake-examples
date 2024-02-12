@@ -2385,7 +2385,7 @@ deflate_zstream::deflate_chunk2(bool final_flag) {
                         (final_flag ? Z_FINISH : 0) /*flush*/);
 
     if (err == Z_STREAM_ERROR)
-        throw runtime_error("basic_zstreambuf::sync: impossible zlib deflate returned Z_STREAM_ERROR");
+        throw runtime_error("deflate_zstream::sync: impossible zlib deflate returned Z_STREAM_ERROR");
 
     uint8_t * uc_post = zstream_.next_in;
     uint8_t * z_post = zstream_.next_out;
