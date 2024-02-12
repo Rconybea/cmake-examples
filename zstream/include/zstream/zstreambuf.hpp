@@ -177,7 +177,7 @@ protected:
 
         std::streambuf * nsbuf = native_sbuf_.get();
 
-        /* any previous output from .in_zs has already been consumed (otherwise not in underflow state) */
+        /* any previous output from .in_zs must have already been consumed (otherwise not in underflow state) */
         in_zs_.uc_consume_all();
 
         while (true) {
