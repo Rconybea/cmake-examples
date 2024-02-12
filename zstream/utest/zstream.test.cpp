@@ -80,3 +80,113 @@ TEST_CASE("zstream", "[zstream]") {
         }
     }
 }
+
+namespace {
+    struct TestCase {
+        TestCase(uint32_t bufz, uint32_t wz, uint32_t rz)
+            : buf_z_{bufz}, write_chunk_z_{wz}, read_chunk_z_{rz} {}
+
+        /* buffer size for zstreambuf - applies to buffers for:
+         * - uncompressed input + output
+         * - compressed input + output
+         */
+        uint32_t buf_z_ = 0;
+        /* write uncompressed text in chunks of this size */
+        uint32_t write_chunk_z_ = 0;
+        /* read uncompresseed text in chunks of this size */
+        uint32_t read_chunk_z_ = 0;
+    };
+
+    static vector<TestCase> s_testcase_v = {
+        TestCase(1, 1, 1),
+        TestCase(1, 256, 256),
+        TestCase(256, 15, 15),
+        TestCase(256, 16, 16),
+        TestCase(256, 17, 17),
+        TestCase(256, 129, 129),
+        TestCase(65536, 129, 129),
+        TestCase(65536, 65536, 65536)
+    };
+}
+
+/* use zstream + write to file on disk.
+ */
+TEST_CASE("zstream-filebuf", "[zstream]") {
+    for (size_t i_tc = 0; i_tc < s_testcase_v.size(); ++i_tc) {
+        TestCase const & tc = s_testcase_v[i_tc];
+
+        INFO(tostr("i_tc=", i_tc));
+
+        // ----------------------------------------------------------------
+        // 1 - compress some text
+        // ----------------------------------------------------------------
+
+        std::string fname = tostr("test", i_tc, ".gz");
+
+        {
+            INFO(tostr("writing to fname=", fname));
+
+            zstream zs(fname.c_str(), ios::out);
+
+            /* could just do
+             *   zs.write(Text::s_text, strlen(Text::s_text))
+             * here.
+             *
+             * Instead write from s_text in small chunk sizes
+             */
+            size_t const c_write_z = tc.write_chunk_z_;
+
+            for (size_t i=0, n=strlen(Text::s_text); i<n;) {
+                size_t nreq = std::min(c_write_z, n-i);
+
+                zs.write(Text::s_text + i, nreq);
+                i += nreq;
+            }
+
+            zs.close();
+        }
+
+        // ----------------------------------------------------------------
+        // 2 - uncompress + verify
+        // ----------------------------------------------------------------
+
+        /* NOTE:
+         * Can also demonstrate successful compression step with for example
+         *   $ gunzip -c test0.gz
+         */
+
+        {
+            INFO(tostr("reading from fname=", fname));
+
+            zstream zs(fname.c_str(), ios::in);
+
+            std::string input;
+            input.resize(strlen(Text::s_text));
+
+            size_t const c_read_z = tc.read_chunk_z_;
+            size_t n_uc = 0;
+            size_t i_uc = 0;
+            do {
+                zs.read(input.data() + n_uc, c_read_z);
+                i_uc = zs.gcount();
+                n_uc += i_uc;
+            } while (i_uc == c_read_z);
+
+            REQUIRE(n_uc == input.size());
+
+            CHECK(n_uc == ::strlen(Text::s_text));
+
+            for (size_t i=0; i<n_uc; ++i) {
+                INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", input[i]=", input[i]));
+
+                REQUIRE(Text::s_text[i] == input[i]);
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // 3 - cleanup
+        // ----------------------------------------------------------------
+
+        ::remove(fname.c_str());
+    }
+}
