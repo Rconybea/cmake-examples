@@ -66,7 +66,8 @@ operator<< (std::ostream & os, hex_view const & ins) {
     return os;
 }
 
-/* implementation of streambuf that provides output to, and input from, a compressed stream */
+/* implementation of streambuf that provides output to, and input from, a compressed stream
+ */
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstreambuf : public std::basic_streambuf<CharT, Traits> {
 public:
@@ -108,6 +109,12 @@ public:
             this->sync_impl(true /*final_flag*/);
 
             this->closed_flag_ = true;
+
+            /* .native_sbuf may need to flush (e.g. if it's actually a filebuf).
+             * The only way to invoke that behavior through the basic_streambuf api
+             * is to invoke destructor,  so that's what we do here
+             */
+            this->native_sbuf_.reset();
         }
     }
 
@@ -217,6 +224,10 @@ protected:
      */
     virtual int
     sync() override final {
+#      ifndef NDEBUG
+        std::cerr << "zstreambuf::sync: enter" << std::endl;
+#      endif
+
         return this->sync_impl(false /*!final_flag*/);
     }
 
@@ -225,6 +236,11 @@ protected:
      */
     virtual std::streamsize
     xsputn(CharT const * s, std::streamsize n_arg) override final {
+#      ifndef NDEBUG
+        std::cerr << "zstreambuf::xsputn: enter" << std::endl;
+        std::cerr << hex_view(s, s+n_arg, true) << std::endl;
+#      endif
+
         if (closed_flag_)
             throw std::runtime_error("basic_zstreambuf::xsputn: attempted write to closed stream");
 
@@ -277,6 +293,10 @@ private:
      */
     int
     sync_impl(bool final_flag) {
+#      ifndef NDEBUG
+        std::cerr << "zstreambuf::sync_impl: enter: :final_flag " << final_flag << std::endl;
+#      endif
+
         if (closed_flag_) {
             /* implies attempt to write more output after call to .close() promised not to */
             return -1;
