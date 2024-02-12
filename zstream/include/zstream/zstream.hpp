@@ -4,10 +4,31 @@
 
 #include "zstreambuf.hpp"
 #include <iostream>
+#include <fstream>
 
 /* note: We want to allow out-of-memory-order initialization here.
  *       1. We (presumably) must initialize .rdbuf before passing it to basic_iostream's ctor
  *       2. Since we inherit basic_iostream,  its memory will precede .rdbuf
+ *
+ * Example 1 (compress)
+ *
+ *   // zstream = basic_zstream<char>,  in this file following basic_zstream decl
+ *   zstream zs(64*1024, "path/to/foo.gz", ios::out);
+ *
+ *   zs << "some text to be compressed" << endl;
+ *
+ *   zs.close();
+ *
+ * Example 2 (uncompress)
+ *
+ *   zstream zs(64*1024, "path/to/foo.gz", ios::in);
+ *
+ *   while (!zs.eof()) {
+ *     std::string x;
+ *     zs >> x;
+ *
+ *     cout << "input: [" << x << "]" << endl;
+ *   }
  */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreorder"
@@ -21,12 +42,33 @@ public:
     using off_type = typename Traits::off_type;
     using zstreambuf_type = basic_zstreambuf<CharT, Traits>;
 
+    static constexpr std::streamsize c_default_buffer_size = 64 * 1024;
+
 public:
-    basic_zstream(std::streamsize buf_z, std::unique_ptr<std::streambuf> native_sbuf)
-        :
-          rdbuf_(buf_z, std::move(native_sbuf)),
+    basic_zstream(std::streamsize buf_z,
+                  std::unique_ptr<std::streambuf> native_sbuf,
+                  std::ios::openmode mode)
+        : rdbuf_(buf_z, std::move(native_sbuf), mode),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
            {}
+    /* convenience ctor;  apply default buffer size */
+    basic_zstream(std::unique_ptr<std::streambuf> native_sbuf,
+                  std::ios::openmode mode)
+        : basic_zstream(c_default_buffer_size, std::move(native_sbuf), mode) {}
+    /* convenience ctor;  creates filebuf attached to filename and opens it */
+    basic_zstream(std::streamsize buf_z,
+                  char const * filename,
+                  std::ios::openmode mode = std::ios::in)
+        : rdbuf_(buf_z,
+                 std::unique_ptr<std::streambuf>((new std::filebuf())->open(filename,
+                                                                            std::ios::binary | mode)),
+                 mode),
+          std::basic_iostream<CharT, Traits>(&rdbuf_)
+        {}
+    /* convenience ctor;  apply default buffer size */
+    basic_zstream(char const * filename,
+                  std::ios::openmode mode = std::ios::in)
+        : basic_zstream(c_default_buffer_size, filename, mode) {}
     ~basic_zstream() = default;
 
     zstreambuf_type * rdbuf() { return &rdbuf_; }
@@ -52,6 +94,10 @@ public:
     void close() {
         this->rdbuf_.close();
     }
+
+#  ifndef NDEBUG
+    void set_debug_flag(bool x) { rdbuf_.set_debug_flag(x); }
+#  endif
 
 private:
     basic_zstreambuf<CharT, Traits> rdbuf_;
