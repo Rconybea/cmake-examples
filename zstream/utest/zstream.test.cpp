@@ -126,7 +126,7 @@ TEST_CASE("zstream-filebuf", "[zstream]") {
         {
             INFO(tostr("writing to fname=", fname));
 
-            zstream zs(fname.c_str(), ios::out);
+            zstream zs(tc.buf_z_, fname.c_str(), ios::out);
 
             /* could just do
              *   zs.write(Text::s_text, strlen(Text::s_text))
@@ -158,7 +158,7 @@ TEST_CASE("zstream-filebuf", "[zstream]") {
         {
             INFO(tostr("reading from fname=", fname));
 
-            zstream zs(fname.c_str(), ios::in);
+            zstream zs(tc.buf_z_, fname.c_str(), ios::in);
 
             std::string input;
             input.resize(strlen(Text::s_text));
