@@ -1,5 +1,6 @@
 #include "text.hpp"
-#include "zstream/zstreambuf.hpp"
+#include "zstream/zstream.hpp"
+//#include "zstream/zstreambuf.hpp"
 #include "catch2/catch.hpp"
 
 #include <string_view>
@@ -85,6 +86,9 @@ namespace {
 }
 
 TEST_CASE("zstreambuf", "[zstreambuf]") {
+    /* true to enable some logging,  useful if this unit test should fail */
+    constexpr bool c_debug_flag = false;
+
     for (size_t i_tc = 0; i_tc < s_testcase_v.size(); ++i_tc) {
         TestCase const & tc = s_testcase_v[i_tc];
 
@@ -107,7 +111,7 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
         zsbuf->pubsetbuf(&((*zbuf)[0]), sizeof(zbuf_type));
 
         /* 256: for unit test want to exercise overflow.. frequently */
-        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_));
+        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_, nullptr, ios::out));
 
         ogbuf->adopt_native_sbuf(std::move(zsbuf));
 
@@ -123,30 +127,32 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
 
         ogbuf->close();
 
-        cout << "uc out: " << ogbuf->n_uc_out_total() << endl;
-        cout << "z  out: " << ogbuf->n_z_out_total() << endl;
+        if (c_debug_flag) {
+            cout << "uc out: " << ogbuf->n_uc_out_total() << endl;
+            cout << "z  out: " << ogbuf->n_z_out_total() << endl;
 
-        size_t i = 0;
-        size_t n = ogbuf->n_z_out_total();
-        while (i < n) {
-            /* 64 hex values */
-            do {
-                uint8_t ch = (*zbuf)[i];
-                uint8_t lo = ch & 0xf;
-                uint8_t hi = ch >> 4;
-                char lo_ch = (lo < 10) ? '0' + lo : 'a' + lo - 10;
-                char hi_ch = (hi < 10) ? '0' + hi : 'a' + hi - 10;
+            size_t i = 0;
+            size_t n = ogbuf->n_z_out_total();
+            while (i < n) {
+                /* 64 hex values */
+                do {
+                    uint8_t ch = (*zbuf)[i];
+                    uint8_t lo = ch & 0xf;
+                    uint8_t hi = ch >> 4;
+                    char lo_ch = (lo < 10) ? '0' + lo : 'a' + lo - 10;
+                    char hi_ch = (hi < 10) ? '0' + hi : 'a' + hi - 10;
 
-                cout << " " << hi_ch << lo_ch;
+                    cout << " " << hi_ch << lo_ch;
 
-                ++i;
-            } while ((i < n) && (i % 64 != 0));
+                    ++i;
+                } while ((i < n) && (i % 64 != 0));
 
-            cout << endl;
+                cout << endl;
+            }
         }
 
         // ----------------------------------------------------------------
-        // phase 2 - not decompress compressed output,
+        // phase 2 - now decompress compressed output,
         //           make sure we recover original text
         // ----------------------------------------------------------------
 

@@ -66,7 +66,8 @@ operator<< (std::ostream & os, hex_view const & ins) {
     return os;
 }
 
-/* implementation of streambuf that provides output to, and input from, a compressed stream */
+/* implementation of streambuf that provides output to, and input from, a compressed stream
+ */
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstreambuf : public std::basic_streambuf<CharT, Traits> {
 public:
@@ -75,8 +76,10 @@ public:
 
 public:
     basic_zstreambuf(size_type buf_z = 64 * 1024,
-                     std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>())
+                     std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>(),
+                     std::ios::openmode mode = std::ios::in)
         :
+        openmode_{mode},
         in_zs_{aligned_upper_bound(buf_z), alignment()},
         out_zs_{aligned_upper_bound(buf_z), alignment()},
         native_sbuf_{std::move(native_sbuf)}
@@ -108,6 +111,12 @@ public:
             this->sync_impl(true /*final_flag*/);
 
             this->closed_flag_ = true;
+
+            /* .native_sbuf may need to flush (e.g. if it's actually a filebuf).
+             * The only way to invoke that behavior through the basic_streambuf api
+             * is to invoke destructor,  so that's what we do here
+             */
+            this->native_sbuf_.reset();
         }
     }
 
@@ -137,6 +146,11 @@ public:
         std::swap(native_sbuf_, x.native_sbuf_);
     }
 
+#  ifndef NDEBUG
+    /* control per-instance debug output */
+    void set_debug_flag(bool x) { debug_flag_ = x; }
+#  endif
+
 protected:
     /* estimates #of characters n available for input -- .underflow() will not be called
      * or throw exception until at least n chars are extracted.
@@ -158,9 +172,17 @@ protected:
     virtual int_type underflow() override final {
         /* control here: .input buffer (i.e. .in_zs.uc_input_buf) has been entirely consumed */
 
+#      ifndef NDEBUG
+        if (debug_flag_)
+            std::cerr << "zstreambuf::underflow: enter" << std::endl;
+#      endif
+
+        if ((openmode_ & std::ios::in) == 0)
+            throw std::runtime_error("basic_zstreambuf::underflow: expected ios::in bit set when reading from streambuf");
+
         std::streambuf * nsbuf = native_sbuf_.get();
 
-        /* any previous output from .in_zs has already been consumed (otherwise not in underflow state) */
+        /* any previous output from .in_zs must have already been consumed (otherwise not in underflow state) */
         in_zs_.uc_consume_all();
 
         while (true) {
@@ -176,6 +198,11 @@ protected:
 
                 /* .in_zs needs to know how much we filled */
                 in_zs_.z_produce(zspan.prefix(n));
+
+#              ifndef NDEBUG
+                if(debug_flag_)
+                    std::cerr << "zstreambuf::underflow: read " << n << " compressed bytes (allowing space for " << zspan.size() << ")" << std::endl;
+#              endif
             } else {
                 /* it's possible previous inflate_chunk filled uncompressed output
                  * without consuming any compressed input,  in which case can have z_avail empty
@@ -217,6 +244,11 @@ protected:
      */
     virtual int
     sync() override final {
+#      ifndef NDEBUG
+        if (debug_flag_)
+            std::cerr << "zstreambuf::sync: enter" << std::endl;
+#      endif
+
         return this->sync_impl(false /*!final_flag*/);
     }
 
@@ -225,8 +257,18 @@ protected:
      */
     virtual std::streamsize
     xsputn(CharT const * s, std::streamsize n_arg) override final {
+#      ifndef NDEBUG
+        if (debug_flag_) {
+            std::cerr << "zstreambuf::xsputn: enter" << std::endl;
+            std::cerr << hex_view(s, s+n_arg, true) << std::endl;
+        }
+#      endif
+
         if (closed_flag_)
             throw std::runtime_error("basic_zstreambuf::xsputn: attempted write to closed stream");
+
+        if ((openmode_ & std::ios::out) == 0)
+            throw std::runtime_error("basic_zstreambuf::xsputn: expected ios::out bit set when writing to streambuf");
 
         std::streamsize n = n_arg;
 
@@ -274,12 +316,24 @@ private:
      *
      * final_flag = true:  compressed stream is irrevocably complete -- no further output may be written
      * final_flag = false: after .sync_impl() returns may still have un-synced output in .output_zs
+     *
+     * TODO: sync for input (e.g. consider tailing a file)
      */
     int
     sync_impl(bool final_flag) {
+#      ifndef NDEBUG
+        if (debug_flag_)
+        std::cerr << "zstreambuf::sync_impl: enter: :final_flag " << final_flag << std::endl;
+#      endif
+
         if (closed_flag_) {
             /* implies attempt to write more output after call to .close() promised not to */
             return -1;
+        }
+
+        if ((openmode_ & std::ios::out) == 0) {
+            /* nothing to do if not using stream for output */
+            return 0;
         }
 
         std::streambuf * nsbuf = native_sbuf_.get();
@@ -299,8 +353,14 @@ private:
             out_zs_.deflate_chunk(final_flag);
             auto zspan = out_zs_.z_contents();
 
-            if (nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()), zspan.size()) < static_cast<std::streamsize>(zspan.size()))
-                throw std::runtime_error("zstreambuf::sync_impl: partial write!");
+            std::streamsize n_written = nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()),
+                                                     zspan.size());
+
+            if (n_written < static_cast<std::streamsize>(zspan.size())) {
+                throw std::runtime_error(tostr("zstreambuf::sync_impl: partial write",
+                                               " :attempted ", zspan.size(),
+                                               " :wrote ", n_written));
+            }
 
             out_zs_.z_consume(zspan);
 
@@ -369,6 +429,15 @@ private:
      *   .pbeg, .pend ------------> .out_zs -------------------------------> .native_sbuf
      */
 
+    /* we need to know if intending to use this zstreambuf for output:
+     * (i) compressing an empty input sequence produces non-empty output (since will create a 20-byte gzip header)
+     *     Therefore:
+     *     (a) zstream("foo.gz", ios::out) should create valid foo.gz representing an empty sequence.
+     *     (b) .sync_impl(true) needs to know whether to do this,  since it will also be called when intending
+     *         this zstreambuf for input only
+     */
+    std::ios::openmode openmode_;
+
     /* set irrevocably on .close() */
     bool closed_flag_ = false;
 
@@ -384,6 +453,10 @@ private:
 
     /* i/o for compressed data */
     std::unique_ptr<std::streambuf> native_sbuf_;
+
+#  ifndef NDEBUG
+    bool debug_flag_ = false;
+#  endif
 }; /*basic_zstreambuf*/
 
 using zstreambuf = basic_zstreambuf<char>;
