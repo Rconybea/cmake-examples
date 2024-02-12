@@ -1,5 +1,6 @@
 #include "text.hpp"
-#include "zstream/zstreambuf.hpp"
+#include "zstream/zstream.hpp"
+//#include "zstream/zstreambuf.hpp"
 #include "catch2/catch.hpp"
 
 #include <string_view>
@@ -110,7 +111,7 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
         zsbuf->pubsetbuf(&((*zbuf)[0]), sizeof(zbuf_type));
 
         /* 256: for unit test want to exercise overflow.. frequently */
-        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_));
+        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_, nullptr, ios::out));
 
         ogbuf->adopt_native_sbuf(std::move(zsbuf));
 

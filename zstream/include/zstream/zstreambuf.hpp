@@ -76,8 +76,10 @@ public:
 
 public:
     basic_zstreambuf(size_type buf_z = 64 * 1024,
-                     std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>())
+                     std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>(),
+                     std::ios::openmode mode = std::ios::in)
         :
+        openmode_{mode},
         in_zs_{aligned_upper_bound(buf_z), alignment()},
         out_zs_{aligned_upper_bound(buf_z), alignment()},
         native_sbuf_{std::move(native_sbuf)}
@@ -175,6 +177,9 @@ protected:
             std::cerr << "zstreambuf::underflow: enter" << std::endl;
 #      endif
 
+        if ((openmode_ & std::ios::in) == 0)
+            throw std::runtime_error("basic_zstreambuf::underflow: expected ios::in bit set when reading from streambuf");
+
         std::streambuf * nsbuf = native_sbuf_.get();
 
         /* any previous output from .in_zs must have already been consumed (otherwise not in underflow state) */
@@ -262,6 +267,9 @@ protected:
         if (closed_flag_)
             throw std::runtime_error("basic_zstreambuf::xsputn: attempted write to closed stream");
 
+        if ((openmode_ & std::ios::out) == 0)
+            throw std::runtime_error("basic_zstreambuf::xsputn: expected ios::out bit set when writing to streambuf");
+
         std::streamsize n = n_arg;
 
         std::size_t i_loop = 0;
@@ -323,6 +331,11 @@ private:
             return -1;
         }
 
+        if ((openmode_ & std::ios::out) == 0) {
+            /* nothing to do if not using stream for output */
+            return 0;
+        }
+
         std::streambuf * nsbuf = native_sbuf_.get();
 
         /* consume all available uncompressed output
@@ -340,8 +353,14 @@ private:
             out_zs_.deflate_chunk(final_flag);
             auto zspan = out_zs_.z_contents();
 
-            if (nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()), zspan.size()) < static_cast<std::streamsize>(zspan.size()))
-                throw std::runtime_error("zstreambuf::sync_impl: partial write!");
+            std::streamsize n_written = nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()),
+                                                     zspan.size());
+
+            if (n_written < static_cast<std::streamsize>(zspan.size())) {
+                throw std::runtime_error(tostr("zstreambuf::sync_impl: partial write",
+                                               " :attempted ", zspan.size(),
+                                               " :wrote ", n_written));
+            }
 
             out_zs_.z_consume(zspan);
 
@@ -409,6 +428,15 @@ private:
      *                   .sputn()            .z_contents()          .sputn
      *   .pbeg, .pend ------------> .out_zs -------------------------------> .native_sbuf
      */
+
+    /* we need to know if intending to use this zstreambuf for output:
+     * (i) compressing an empty input sequence produces non-empty output (since will create a 20-byte gzip header)
+     *     Therefore:
+     *     (a) zstream("foo.gz", ios::out) should create valid foo.gz representing an empty sequence.
+     *     (b) .sync_impl(true) needs to know whether to do this,  since it will also be called when intending
+     *         this zstreambuf for input only
+     */
+    std::ios::openmode openmode_;
 
     /* set irrevocably on .close() */
     bool closed_flag_ = false;

@@ -11,8 +11,10 @@ TEST_CASE("zstream", "[zstream]") {
     std::fill(zbuf->begin(), zbuf->end(), '\0');
 
     size_t n_z_out_total = 0;
+
+    /* compress.. */
     {
-        zstream zs(64 * 1024, move(unique_ptr<streambuf>(new stringbuf())));
+        zstream zs(64 * 1024, std::move(unique_ptr<streambuf>(new stringbuf())), ios::out);
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), zbuf->size());
 
@@ -44,7 +46,9 @@ TEST_CASE("zstream", "[zstream]") {
 
     /* now decompress.. */
     {
-        zstream zs(64 * 1024, move(unique_ptr<streambuf>(new stringbuf())));
+        zstream zs(64 * 1024,
+                   std::move(unique_ptr<streambuf>(new stringbuf())),
+                   ios::in);
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), n_z_out_total);
 
