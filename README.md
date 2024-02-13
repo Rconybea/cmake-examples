@@ -44,15 +44,14 @@ and to provide an opinionated (though possibly flawed) version of best practice
 15. ex15: add unit test code coverage (using `gcov` and `lcov`)
 16. ex16: add performance benchmarks (as provided by `catch2`)
 
-* ex16: add pybind11 library (pyzstream)
-* ex17: provide cmake find_package() support with installs of our example codebase
-* ex18: add sphinx doc
+* ex17: add pybind11 library (pyzstream)
+* ex18: provide cmake find_package() support with installs of our example codebase
+* ex19: add sphinx doc
 
 * c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
 * project-specific macros - simplify
 * project-specific macros - support (monorepo, separable) builds from same tree
-* add performance benchmarks.
 
 - monorepo-style: artifacts using dependencies supplied from same repo and build tree
 
@@ -66,8 +65,10 @@ $ git clone git@github.com:Rconybea/cmake-examples.git
 ```
 
 ## Example 1
+
 ```
-$ git checkout ex1
+$ cd cmake-examples
+$ git switch ex1
 ```
 
 ```
@@ -100,7 +101,7 @@ add_executable(${SELF_EXE} ${SELF_SRCS})
 To build + run:
 ```
 $ cd cmake-examples
-$ git checkout ex1
+$ git switch ex1
 $ mkdir build
 $ cmake -B build       # ..configure
 -- Configuring done
@@ -179,6 +180,17 @@ The problem with a built-in non-empty default, is that when writing cmake code w
 was observed value provided by cmake, or from command line?
 
 We'll work around this problem by using variable names not known to cmake.
+
+The `-fno-strict-aliasing` default falls on the
+"strict aliasing rules combined with c++ templates create too many footguns to tolerate"
+side of the strict-aliasing versus no-strict-aliasing debate.
+
+A good discussion of strict aliasing rules here:
+https://gist.github.com/shafik/848ae25ee209f698763cffee272a58f8
+
+and an older C-only discussion here:
+https://cellperformance.beyond3d.com/articles/2006/06/understanding-strict-aliasing.html
+
 
 ```
 # CMakeLists.txt
@@ -331,7 +343,7 @@ endif()
 invoke build:
 ```
 $ cd cmake-examples
-$ git checkout ex2
+$ git switch ex2
 $ mkdir -p build
 $ ln -s build/compile_commands.json
 $ cmake -B build
@@ -444,7 +456,7 @@ main(int argc, char * argv[]) {
 invoke build:
 ```
 $ cd cmake-examples
-$ git checkout ex3
+$ git switch ex3
 $ mkdir -p build
 $ ln -s build/compile_commands.json
 $ cmake -B build
@@ -472,6 +484,11 @@ Hello, Kermit!
 
 Use an external software package that does not provide direct cmake support,  but does support pkg-config.
 For this example,  we'll use `zlib`.
+
+```
+$ cd cmake-examples
+$ git switch ex4
+```
 
 We add to `CMakeLists.txt`:
 1. `find_package(PkgConfig)`
@@ -595,7 +612,7 @@ main(int argc, char * argv[]) {
 invoke build:
 ```
 $ cd cmake-examples
-$ git checkout ex4
+$ git switch ex4
 $ mkdir -p build
 $ ln -s build/compile_commands.json
 $ cmake -B build
@@ -617,6 +634,12 @@ compressed data: 78 9c f3 48 cd c9 c9 d7 51 48 cc c9 51 28 c9 48 55 c8 c9 cf 4b 
 
 This example is a preparatory refactoring step:  we refactor our inline compression code to a separate translation unit;
 and while we're at it,  implement the reverse (inflation) operation.
+
+
+```
+$ cd cmake-examples
+$ git switch ex5
+```
 
 Add to `CMakeLists.txt`:
 1. new translation unit `compression.cpp`:
@@ -742,7 +765,7 @@ compression::inflate(vector<uint8_t> const & z_data_v,
 To invoke build:
 ```
 $ cd cmake-examples
-$ git checkout ex5
+$ git switch ex5
 $ mkdir -p build
 $ ln -s build/compile_commands.json
 $ cmake -B build
@@ -766,6 +789,11 @@ compressed data: 78 9c f3 48 cd c9 c9 d7 51 48 cc c9 51 28 c9 48 55 c8 c9 cf 4b 
 ## Example 6
 
 Add an install target.   This is a bit of a placeholder,  we'll need to expand on this later.
+
+```
+$ cd cmake-examples
+$ git switch ex6
+```
 
 Add to `CMakeLists.txt`:
 ```
@@ -2891,7 +2919,7 @@ $ cmake --install build
 -- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
 -- Installing: /home/roland/scratch/bin/myzip
 -- Set runtime path of "/home/roland/scratch/bin/myzip" to "/home/roland/scratch/lib"
-$ tree ~/scratch
+$ tree $PREFIX
 /home/roland/scratch
 ├── bin
 │   ├── hello
@@ -2999,7 +3027,7 @@ Details:
 1. `zstream` build
 
 ```
-// zstream/CMakeLists.txt
+# zstream/CMakeLists.txt
 
 set(SELF_LIB zstream)
 
@@ -3094,7 +3122,8 @@ operator<< (std::ostream & os, hex_view const & ins) {
     return os;
 }
 
-/* implementation of streambuf that provides output to, and input from, a compressed stream */
+/* implementation of streambuf that provides output to, and input from, a compressed stream
+ */
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstreambuf : public std::basic_streambuf<CharT, Traits> {
 public:
@@ -3103,8 +3132,10 @@ public:
 
 public:
     basic_zstreambuf(size_type buf_z = 64 * 1024,
-                     std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>())
+                     std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>(),
+                     std::ios::openmode mode = std::ios::in)
         :
+        openmode_{mode},
         in_zs_{aligned_upper_bound(buf_z), alignment()},
         out_zs_{aligned_upper_bound(buf_z), alignment()},
         native_sbuf_{std::move(native_sbuf)}
@@ -3136,6 +3167,12 @@ public:
             this->sync_impl(true /*final_flag*/);
 
             this->closed_flag_ = true;
+
+            /* .native_sbuf may need to flush (e.g. if it's actually a filebuf).
+             * The only way to invoke that behavior through the basic_streambuf api
+             * is to invoke destructor,  so that's what we do here
+             */
+            this->native_sbuf_.reset();
         }
     }
 
@@ -3165,6 +3202,11 @@ public:
         std::swap(native_sbuf_, x.native_sbuf_);
     }
 
+#  ifndef NDEBUG
+    /* control per-instance debug output */
+    void set_debug_flag(bool x) { debug_flag_ = x; }
+#  endif
+
 protected:
     /* estimates #of characters n available for input -- .underflow() will not be called
      * or throw exception until at least n chars are extracted.
@@ -3186,9 +3228,17 @@ protected:
     virtual int_type underflow() override final {
         /* control here: .input buffer (i.e. .in_zs.uc_input_buf) has been entirely consumed */
 
+#      ifndef NDEBUG
+        if (debug_flag_)
+            std::cerr << "zstreambuf::underflow: enter" << std::endl;
+#      endif
+
+        if ((openmode_ & std::ios::in) == 0)
+            throw std::runtime_error("basic_zstreambuf::underflow: expected ios::in bit set when reading from streambuf");
+
         std::streambuf * nsbuf = native_sbuf_.get();
 
-        /* any previous output from .in_zs has already been consumed (otherwise not in underflow state) */
+        /* any previous output from .in_zs must have already been consumed (otherwise not in underflow state) */
         in_zs_.uc_consume_all();
 
         while (true) {
@@ -3204,6 +3254,11 @@ protected:
 
                 /* .in_zs needs to know how much we filled */
                 in_zs_.z_produce(zspan.prefix(n));
+
+#              ifndef NDEBUG
+                if(debug_flag_)
+                    std::cerr << "zstreambuf::underflow: read " << n << " compressed bytes (allowing space for " << zspan.size() << ")" << std::endl;
+#              endif
             } else {
                 /* it's possible previous inflate_chunk filled uncompressed output
                  * without consuming any compressed input,  in which case can have z_avail empty
@@ -3217,7 +3272,7 @@ protected:
              *
              * note this implies we always have whole-number-of-CharT in .uc_contents
              */
-            if (in_zs_.uc_avail().empty() || (n < zspan.size()))
+            if (in_zs_.uc_avail().empty() || (n < static_cast<std::streamsize>(zspan.size())))
                 break;
         }
 
@@ -3245,6 +3300,11 @@ protected:
      */
     virtual int
     sync() override final {
+#      ifndef NDEBUG
+        if (debug_flag_)
+            std::cerr << "zstreambuf::sync: enter" << std::endl;
+#      endif
+
         return this->sync_impl(false /*!final_flag*/);
     }
 
@@ -3253,8 +3313,18 @@ protected:
      */
     virtual std::streamsize
     xsputn(CharT const * s, std::streamsize n_arg) override final {
+#      ifndef NDEBUG
+        if (debug_flag_) {
+            std::cerr << "zstreambuf::xsputn: enter" << std::endl;
+            std::cerr << hex_view(s, s+n_arg, true) << std::endl;
+        }
+#      endif
+
         if (closed_flag_)
             throw std::runtime_error("basic_zstreambuf::xsputn: attempted write to closed stream");
+
+        if ((openmode_ & std::ios::out) == 0)
+            throw std::runtime_error("basic_zstreambuf::xsputn: expected ios::out bit set when writing to streambuf");
 
         std::streamsize n = n_arg;
 
@@ -3302,12 +3372,24 @@ private:
      *
      * final_flag = true:  compressed stream is irrevocably complete -- no further output may be written
      * final_flag = false: after .sync_impl() returns may still have un-synced output in .output_zs
+     *
+     * TODO: sync for input (e.g. consider tailing a file)
      */
     int
     sync_impl(bool final_flag) {
+#      ifndef NDEBUG
+        if (debug_flag_)
+        std::cerr << "zstreambuf::sync_impl: enter: :final_flag " << final_flag << std::endl;
+#      endif
+
         if (closed_flag_) {
             /* implies attempt to write more output after call to .close() promised not to */
             return -1;
+        }
+
+        if ((openmode_ & std::ios::out) == 0) {
+            /* nothing to do if not using stream for output */
+            return 0;
         }
 
         std::streambuf * nsbuf = native_sbuf_.get();
@@ -3327,8 +3409,14 @@ private:
             out_zs_.deflate_chunk(final_flag);
             auto zspan = out_zs_.z_contents();
 
-            if (nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()), zspan.size()) < zspan.size())
-                throw std::runtime_error("zstreambuf::sync_impl: partial write!");
+            std::streamsize n_written = nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()),
+                                                     zspan.size());
+
+            if (n_written < static_cast<std::streamsize>(zspan.size())) {
+                throw std::runtime_error(tostr("zstreambuf::sync_impl: partial write",
+                                               " :attempted ", zspan.size(),
+                                               " :wrote ", n_written));
+            }
 
             out_zs_.z_consume(zspan);
 
@@ -3397,6 +3485,15 @@ private:
      *   .pbeg, .pend ------------> .out_zs -------------------------------> .native_sbuf
      */
 
+    /* we need to know if intending to use this zstreambuf for output:
+     * (i) compressing an empty input sequence produces non-empty output (since will create a 20-byte gzip header)
+     *     Therefore:
+     *     (a) zstream("foo.gz", ios::out) should create valid foo.gz representing an empty sequence.
+     *     (b) .sync_impl(true) needs to know whether to do this,  since it will also be called when intending
+     *         this zstreambuf for input only
+     */
+    std::ios::openmode openmode_;
+
     /* set irrevocably on .close() */
     bool closed_flag_ = false;
 
@@ -3412,6 +3509,10 @@ private:
 
     /* i/o for compressed data */
     std::unique_ptr<std::streambuf> native_sbuf_;
+
+#  ifndef NDEBUG
+    bool debug_flag_ = false;
+#  endif
 }; /*basic_zstreambuf*/
 
 using zstreambuf = basic_zstreambuf<char>;
@@ -3435,7 +3536,34 @@ namespace std {
 
 #include "zstreambuf.hpp"
 #include <iostream>
+#include <fstream>
 
+/* note: We want to allow out-of-memory-order initialization here.
+ *       1. We (presumably) must initialize .rdbuf before passing it to basic_iostream's ctor
+ *       2. Since we inherit basic_iostream,  its memory will precede .rdbuf
+ *
+ * Example 1 (compress)
+ *
+ *   // zstream = basic_zstream<char>,  in this file following basic_zstream decl
+ *   zstream zs(64*1024, "path/to/foo.gz", ios::out);
+ *
+ *   zs << "some text to be compressed" << endl;
+ *
+ *   zs.close();
+ *
+ * Example 2 (uncompress)
+ *
+ *   zstream zs(64*1024, "path/to/foo.gz", ios::in);
+ *
+ *   while (!zs.eof()) {
+ *     std::string x;
+ *     zs >> x;
+ *
+ *     cout << "input: [" << x << "]" << endl;
+ *   }
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreorder"
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstream : public std::basic_iostream<CharT, Traits> {
 public:
@@ -3446,11 +3574,33 @@ public:
     using off_type = typename Traits::off_type;
     using zstreambuf_type = basic_zstreambuf<CharT, Traits>;
 
+    static constexpr std::streamsize c_default_buffer_size = 64 * 1024;
+
 public:
-    basic_zstream(std::streamsize buf_z, std::unique_ptr<std::streambuf> native_sbuf)
-        : rdbuf_(buf_z, std::move(native_sbuf)),
+    basic_zstream(std::streamsize buf_z,
+                  std::unique_ptr<std::streambuf> native_sbuf,
+                  std::ios::openmode mode)
+        : rdbuf_(buf_z, std::move(native_sbuf), mode),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
            {}
+    /* convenience ctor;  apply default buffer size */
+    basic_zstream(std::unique_ptr<std::streambuf> native_sbuf,
+                  std::ios::openmode mode)
+        : basic_zstream(c_default_buffer_size, std::move(native_sbuf), mode) {}
+    /* convenience ctor;  creates filebuf attached to filename and opens it */
+    basic_zstream(std::streamsize buf_z,
+                  char const * filename,
+                  std::ios::openmode mode = std::ios::in)
+        : rdbuf_(buf_z,
+                 std::unique_ptr<std::streambuf>((new std::filebuf())->open(filename,
+                                                                            std::ios::binary | mode)),
+                 mode),
+          std::basic_iostream<CharT, Traits>(&rdbuf_)
+        {}
+    /* convenience ctor;  apply default buffer size */
+    basic_zstream(char const * filename,
+                  std::ios::openmode mode = std::ios::in)
+        : basic_zstream(c_default_buffer_size, filename, mode) {}
     ~basic_zstream() = default;
 
     zstreambuf_type * rdbuf() { return &rdbuf_; }
@@ -3477,9 +3627,14 @@ public:
         this->rdbuf_.close();
     }
 
+#  ifndef NDEBUG
+    void set_debug_flag(bool x) { rdbuf_.set_debug_flag(x); }
+#  endif
+
 private:
     basic_zstreambuf<CharT, Traits> rdbuf_;
 }; /*basic_zstream*/
+#pragma GCC diagnostic pop
 
 using zstream = basic_zstream<char>;
 
@@ -3528,10 +3683,9 @@ Text::s_text
 
 unit test using `zstreambuf` api,  various read/write chunk sizes
 ```
-// zstream/utest/zstreambuf.test.cpp
-
 #include "text.hpp"
-#include "zstream/zstreambuf.hpp"
+#include "zstream/zstream.hpp"
+//#include "zstream/zstreambuf.hpp"
 #include "catch2/catch.hpp"
 
 #include <string_view>
@@ -3556,14 +3710,11 @@ operator<< (ostream & os, text_compare const & x) {
     size_t i = 0;
 
     while (i < n) {
-        size_t line = std::min(i + 50, n);
-
         os << i << ": ";
 
         /* print all of s1(i .. i+99) */
-        size_t i1 = i;
         size_t line1 = std::min(i + 50, n1);
-        for (; i1 < line1; ++i1) {
+        for (size_t i1 = i; i1 < line1; ++i1) {
             if (isprint(x.s1_[i1]))
                 os << x.s1_[i1];
             else
@@ -3574,7 +3725,6 @@ operator<< (ostream & os, text_compare const & x) {
         os << i << ": ";
 
         /* print s2(i) only when != s1(i) */
-        size_t i2 = i;
         size_t line2 = std::min(i + 50, n2);
         for (size_t i2 = i; i2 < line2; ++i2) {
             if (i2 < line1 && (x.s2_[i2] == x.s1_[i2]))
@@ -3621,6 +3771,9 @@ namespace {
 }
 
 TEST_CASE("zstreambuf", "[zstreambuf]") {
+    /* true to enable some logging,  useful if this unit test should fail */
+    constexpr bool c_debug_flag = false;
+
     for (size_t i_tc = 0; i_tc < s_testcase_v.size(); ++i_tc) {
         TestCase const & tc = s_testcase_v[i_tc];
 
@@ -3643,7 +3796,7 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
         zsbuf->pubsetbuf(&((*zbuf)[0]), sizeof(zbuf_type));
 
         /* 256: for unit test want to exercise overflow.. frequently */
-        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_));
+        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_, nullptr, ios::out));
 
         ogbuf->adopt_native_sbuf(std::move(zsbuf));
 
@@ -3652,37 +3805,39 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
 
         for (size_t i=0, n=strlen(Text::s_text); i<n;) {
             size_t nreq = std::min(c_write_z, n-i);
-            REQUIRE(ogbuf->sputn(Text::s_text + i, nreq) == nreq);
+            REQUIRE(ogbuf->sputn(Text::s_text + i, nreq) == static_cast<streamsize>(nreq));
 
             i += nreq;
         }
 
         ogbuf->close();
 
-        cout << "uc out: " << ogbuf->n_uc_out_total() << endl;
-        cout << "z  out: " << ogbuf->n_z_out_total() << endl;
+        if (c_debug_flag) {
+            cout << "uc out: " << ogbuf->n_uc_out_total() << endl;
+            cout << "z  out: " << ogbuf->n_z_out_total() << endl;
 
-        size_t i = 0;
-        size_t n = ogbuf->n_z_out_total();
-        while (i < n) {
-            /* 64 hex values */
-            do {
-                uint8_t ch = (*zbuf)[i];
-                uint8_t lo = ch & 0xf;
-                uint8_t hi = ch >> 4;
-                char lo_ch = (lo < 10) ? '0' + lo : 'a' + lo - 10;
-                char hi_ch = (hi < 10) ? '0' + hi : 'a' + hi - 10;
+            size_t i = 0;
+            size_t n = ogbuf->n_z_out_total();
+            while (i < n) {
+                /* 64 hex values */
+                do {
+                    uint8_t ch = (*zbuf)[i];
+                    uint8_t lo = ch & 0xf;
+                    uint8_t hi = ch >> 4;
+                    char lo_ch = (lo < 10) ? '0' + lo : 'a' + lo - 10;
+                    char hi_ch = (hi < 10) ? '0' + hi : 'a' + hi - 10;
 
-                cout << " " << hi_ch << lo_ch;
+                    cout << " " << hi_ch << lo_ch;
 
-                ++i;
-            } while ((i < n) && (i % 64 != 0));
+                    ++i;
+                } while ((i < n) && (i % 64 != 0));
 
-            cout << endl;
+                cout << endl;
+            }
         }
 
         // ----------------------------------------------------------------
-        // phase 2 - not decompress compressed output,
+        // phase 2 - now decompress compressed output,
         //           make sure we recover original text
         // ----------------------------------------------------------------
 
@@ -3723,8 +3878,6 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
 
 unit test using `zstream api`
 ```
-// zstream/utest/zstream.test.cpp
-
 #include "text.hpp"
 #include "zstream/zstream.hpp"
 #include "catch2/catch.hpp"
@@ -3732,14 +3885,19 @@ unit test using `zstream api`
 using namespace std;
 
 TEST_CASE("zstream", "[zstream]") {
+    /* true to enable some logging,  useful if this unit test should fail */
+    constexpr bool c_debug_flag = false;
+
     /* make some buffer space */
     using zbuf_type = array<char, 64*1024>;
     unique_ptr<zbuf_type> zbuf(new zbuf_type());
     std::fill(zbuf->begin(), zbuf->end(), '\0');
 
     size_t n_z_out_total = 0;
+
+    /* compress.. */
     {
-        zstream zs(64 * 1024, move(unique_ptr<streambuf>(new stringbuf())));
+        zstream zs(64 * 1024, std::move(unique_ptr<streambuf>(new stringbuf())), ios::out);
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), zbuf->size());
 
@@ -3748,22 +3906,26 @@ TEST_CASE("zstream", "[zstream]") {
         /* reminder: have to close zstream to get complete compressed output. */
         zs.close();
 
-        cout << "uc out: " << zs.rdbuf()->n_uc_out_total() << endl;
-        cout << "z  out: " << zs.rdbuf()->n_z_out_total() << endl;
+        if (c_debug_flag) {
+            cout << "uc out: " << zs.rdbuf()->n_uc_out_total() << endl;
+            cout << "z  out: " << zs.rdbuf()->n_z_out_total() << endl;
+        }
 
-        size_t i = 0;
         size_t n = zs.rdbuf()->n_z_out_total();
 
-        while (i < n) {
-            /* 64 hex values */
-            do {
-                uint8_t ch = (*zbuf)[i];
+        if (c_debug_flag) {
+            size_t i = 0;
+            while (i < n) {
+                /* 64 hex values */
+                do {
+                    uint8_t ch = (*zbuf)[i];
 
-                cout << " " << ::hex(ch);
-                ++i;
-            } while ((i < n) && (i % 64 != 0));
+                    cout << " " << ::hex(ch);
+                    ++i;
+                } while ((i < n) && (i % 64 != 0));
 
-            cout << endl;
+                cout << endl;
+            }
         }
 
         n_z_out_total = n;
@@ -3771,26 +3933,27 @@ TEST_CASE("zstream", "[zstream]") {
 
     /* now decompress.. */
     {
-        zstream zs(64 * 1024, move(unique_ptr<streambuf>(new stringbuf())));
+        zstream zs(64 * 1024,
+                   std::move(unique_ptr<streambuf>(new stringbuf())),
+                   ios::in);
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), n_z_out_total);
 
         unique_ptr<zbuf_type> zbuf2(new zbuf_type());
         std::fill(zbuf2->begin(), zbuf2->end(), '\0');
 
-        cerr << "input" << endl;
         unique_ptr<zbuf_type> ucbuf2(new zbuf_type());
         std::fill(ucbuf2->begin(), ucbuf2->end(), '\0');
 
         zs.read(&((*ucbuf2)[0]), ucbuf2->size());
         streamsize n_read = zs.gcount();
 
-        CHECK(n_read == strlen(Text::s_text) + 1);
+        CHECK(n_read == static_cast<streamsize>(strlen(Text::s_text) + 1));
 
-        cerr << "uncompressed input:" << endl;
-        cerr << string_view(&((*ucbuf2)[0]), &((*ucbuf2)[n_read])) << endl;
+        INFO("uncompressed input:");
+        INFO(string_view(&((*ucbuf2)[0]), &((*ucbuf2)[n_read])));
 
-        for (size_t i=0; i<n_read-1; ++i) {
+        for (streamsize i=0; i<n_read-1; ++i) {
             INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", ucbuf2[i]=", (*ucbuf2)[i]));
 
             REQUIRE(Text::s_text[i] == (*ucbuf2)[i]);
@@ -3798,6 +3961,115 @@ TEST_CASE("zstream", "[zstream]") {
     }
 }
 
+namespace {
+    struct TestCase {
+        TestCase(uint32_t bufz, uint32_t wz, uint32_t rz)
+            : buf_z_{bufz}, write_chunk_z_{wz}, read_chunk_z_{rz} {}
+
+        /* buffer size for zstreambuf - applies to buffers for:
+         * - uncompressed input + output
+         * - compressed input + output
+         */
+        uint32_t buf_z_ = 0;
+        /* write uncompressed text in chunks of this size */
+        uint32_t write_chunk_z_ = 0;
+        /* read uncompresseed text in chunks of this size */
+        uint32_t read_chunk_z_ = 0;
+    };
+
+    static vector<TestCase> s_testcase_v = {
+        TestCase(1, 1, 1),
+        TestCase(1, 256, 256),
+        TestCase(256, 15, 15),
+        TestCase(256, 16, 16),
+        TestCase(256, 17, 17),
+        TestCase(256, 129, 129),
+        TestCase(65536, 129, 129),
+        TestCase(65536, 65536, 65536)
+    };
+}
+
+/* use zstream + write to file on disk.
+ */
+TEST_CASE("zstream-filebuf", "[zstream]") {
+    for (size_t i_tc = 0; i_tc < s_testcase_v.size(); ++i_tc) {
+        TestCase const & tc = s_testcase_v[i_tc];
+
+        INFO(tostr("i_tc=", i_tc));
+
+        // ----------------------------------------------------------------
+        // 1 - compress some text
+        // ----------------------------------------------------------------
+
+        std::string fname = tostr("test", i_tc, ".gz");
+
+        {
+            INFO(tostr("writing to fname=", fname));
+
+            zstream zs(fname.c_str(), ios::out);
+
+            /* could just do
+             *   zs.write(Text::s_text, strlen(Text::s_text))
+             * here.
+             *
+             * Instead write from s_text in small chunk sizes
+             */
+            size_t const c_write_z = tc.write_chunk_z_;
+
+            for (size_t i=0, n=strlen(Text::s_text); i<n;) {
+                size_t nreq = std::min(c_write_z, n-i);
+
+                zs.write(Text::s_text + i, nreq);
+                i += nreq;
+            }
+
+            zs.close();
+        }
+
+        // ----------------------------------------------------------------
+        // 2 - uncompress + verify
+        // ----------------------------------------------------------------
+
+        /* NOTE:
+         * Can also demonstrate successful compression step with for example
+         *   $ gunzip -c test0.gz
+         */
+
+        {
+            INFO(tostr("reading from fname=", fname));
+
+            zstream zs(fname.c_str(), ios::in);
+
+            std::string input;
+            input.resize(strlen(Text::s_text));
+
+            size_t const c_read_z = tc.read_chunk_z_;
+            size_t n_uc = 0;
+            size_t i_uc = 0;
+            do {
+                zs.read(input.data() + n_uc, c_read_z);
+                i_uc = zs.gcount();
+                n_uc += i_uc;
+            } while (i_uc == c_read_z);
+
+            REQUIRE(n_uc == input.size());
+
+            CHECK(n_uc == ::strlen(Text::s_text));
+
+            for (size_t i=0; i<n_uc; ++i) {
+                INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", input[i]=", input[i]));
+
+                REQUIRE(Text::s_text[i] == input[i]);
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // 3 - cleanup
+        // ----------------------------------------------------------------
+
+        ::remove(fname.c_str());
+    }
+}
 ```
 
 5. toplevel CMakeLists.txt:
@@ -4562,4 +4834,379 @@ Label Time Summary:
 benchmark    =  14.65 sec*proc (1 test)
 
 Total Test time (real) =  14.65 sec
+```
+
+# Example 17
+
+Add a pybind11 library.   We will wrap zstream for python
+
+We have to commit to a python minor version number;  this is determined by the `python.h` version
+that gets included from pybind11.
+Any translation unit that directly-or-indirectly includes `python.h`,  also pins its build artifacts to the particular
+python minor version associated with that header.
+It follows that we want to minimize the set of translation units that are so pinned.
+
+```
+$ cd cmake-examples
+$ git switch ex17
+```
+
+source tree:
+```
+$ tree
+.
+|-- CMakeLists.txt
+|-- LICENSE
+|-- README.md
+|-- app
+|   |-- hello
+|   |   |-- CMakeLists.txt
+|   |   `-- hello.cpp
+|   `-- myzip
+|       |-- CMakeLists.txt
+|       |-- myzip.cpp
+|       `-- utest
+|           |-- CMakeLists.txt
+|           |-- myzip.utest
+|           `-- textfile
+|-- cmake
+|   |-- gen-ccov.in
+|   `-- lcov-harness
+|-- compile_commands.json -> build/compile_commands.json
+|-- compression
+|   |-- CMakeLists.txt
+|   |-- buffered_deflate_zstream.cpp
+|   |-- buffered_inflate_zstream.cpp
+|   |-- compression.cpp
+|   |-- deflate_zstream.cpp
+|   |-- include
+|   |   `-- compression
+|   |       |-- base_zstream.hpp
+|   |       |-- buffer.hpp
+|   |       |-- buffered_deflate_zstream.hpp
+|   |       |-- buffered_inflate_zstream.hpp
+|   |       |-- compression.hpp
+|   |       |-- deflate_zstream.hpp
+|   |       |-- inflate_zstream.hpp
+|   |       |-- span.hpp
+|   |       `-- tostr.hpp
+|   |-- inflate_zstream.cpp
+|   `-- utest
+|       |-- CMakeLists.txt
+|       |-- compression.test.cpp
+|       `-- compression_utest_main.cpp
+|-- pyzstream
+|   |-- CMakeLists.txt
+|   `-- pyzstream.cpp
+`-- zstream
+    |-- CMakeLists.txt
+    |-- include
+    |   `-- zstream
+    |       |-- zstream.hpp
+    |       `-- zstreambuf.hpp
+    `-- utest
+        |-- CMakeLists.txt
+        |-- text.cpp
+        |-- text.hpp
+        |-- zstream.test.cpp
+        |-- zstream_utest_main.cpp
+        `-- zstreambuf.test.cpp
+
+14 directories, 42 files
+```
+
+Changes:
+1. new pybind11 library `pyzstream`.
+2. expand top-level CMakeLists.txt, add pybind11 and pyzstream
+
+Details:
+
+1. `pyzstream` build
+```
+# pyzstream/CMakeLists.txt
+
+set(SELF_LIB pyzstream)
+
+pybind11_add_module(${SELF_LIB} MODULE pyzstream.cpp)
+
+target_link_libraries(${SELF_LIB} PUBLIC zstream)
+
+install(
+    TARGETS ${SELF_LIB}
+    LIBRARY DESTINATION lib COMPONENT Runtime
+)
+```
+
+Remarks:
+- We don't write `add_library()` here,  even though pybind11 will build a shared library;
+  pybind11 takes responsibility for setting suitable compile+link flags for a library that will be invoked from python interpreter.
+- We've left out the `EXPORT`, `ARCHIVE`, `RUNTIME`, `PUBLIC_HEADER` and `BUNDLE` arguments to `install()`,
+  because we know we don't need them for a pybind11 library (since will be only used at runtime as a direct or indirect
+  python dependency.
+
+2. `pyzstream.cpp` source
+
+```
+#include "zstream/zstream.hpp"
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+namespace py = pybind11;
+using namespace std;
+
+PYBIND11_MODULE(pyzstream, m) {
+    // see https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
+
+    m.doc() = "pybind11 plugin for zstream";
+
+    /* wrap ios::openmode */
+    py::class_<std::ios::openmode>(m, "openmode")
+        /* note: 'in' is a keyword in python, can't use here */
+        .def_property_readonly_static("input", [](py::object /*self*/) { return std::ios::in; })
+        .def_property_readonly_static("output", [](py::object /*self*/) { return std::ios::out; })
+        .def_property_readonly_static("binary", [](py::object /*self*/) { return std::ios::binary; })
+        .def("__or__", [](std::ios::openmode x, std::ios::openmode y) { return x|y; })
+        .def("__and__", [](std::ios::openmode x, std::ios::openmode y) { return x&y; })
+        .def("__repr__",
+             [](std::ios::openmode & self)
+                 {
+                     std::stringstream ss;
+
+                     ss << "<openmode ";
+                     std::size_t nset = 0;
+                     if (self & std::ios::in) {
+                         ++nset;
+                         ss << "input";
+                     }
+                     if (self & std::ios::out) {
+                         if (nset)
+                             ss << "|";
+                         ++nset;
+                         ss << "output";
+                     }
+                     if (self & std::ios::binary) {
+                         if (nset)
+                             ss << "|";
+                         ++nset;
+                         ss << "binary";
+                     }
+                     ss << ">";
+
+                     return ss.str();
+                 })
+        ;
+
+    /* The c++ style of iostream reading won't map nicely to python,
+     * because expression like
+     *   s >> x >> y
+     * rely on type information from x, y.
+     *
+     * Instead plan to target the python File api.
+     * Expect to wrap pyzstream into a python class that inherits from the python File class
+     */
+    py::class_<zstream>(m, "zstream")
+        .def(py::init<std::streamsize, char const *, std::ios::openmode>())
+        .def("read",
+             [](zstream & zs, std::streamsize z)
+                 {
+                     /* here we assume we should think of input as being in text mode */
+                     std::string retval;
+                     retval.resize(z);
+
+                     /* read into buffer */
+                     zs.read(retval.data(), z);
+
+                     std::streamsize n_read = zs.gcount();
+
+                     retval.resize(n_read);
+
+                     return retval;
+                 })
+        .def("write",
+             [](zstream & zs, std::string const & x)
+                 {
+                     zs.write(x.data(), x.size());
+
+                     /* cannot return this,  because don't know address of unique python wrapper object */
+                 })
+        .def("close", &zstream::close)
+        .def("__repr__",
+             [](zstream & zs)
+                 {
+                     return "<zstream>";
+                 })
+        ;
+}
+```
+
+2. add to toplevel CMakeLists.txt:
+```
+...
+find_package(pybind11)
+...
+add_subdirectory(pyzstream)
+...
+```
+
+Build:
+```
+$ cd cmake-examples
+$ mkdir -p build
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -B build
+-- CMAKE_CXX_STANDARD: c++ standard level is [20]
+-- PROJECT_CXX_FLAGS: project c++ flags are [-Werror;-Wall;-Wextra;-fno-strict-aliasing]
+-- PROJECT_CXX_FLAGS_DEBUG: debug c++ flags are [-Werror;-Wall;-Wextra;-fno-strict-aliasing;-ggdb]
+-- PROJECT_CXX_FLAGS_RELEASE: release c++ flags are [-Werror;-Wall;-Wextra;-fno-strict-aliasing;-march=native;-O3;-DNDEBUG]
+-- PROJECT_CXX_FLAGS_COVERAGE: coverage c++ flags are [-Werror;-Wall;-Wextra;-fno-strict-aliasing;-ggdb;-Og;-fprofile-arcs;-ftest-coverage]
+-- Found pybind11: /path/to/pybind11/include (found version "2.10.4")
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/roland/proj/cmake-examples/build
+$ cmake --build build
+[  5%] Building CXX object compression/CMakeFiles/compression.dir/compression.cpp.o
+[ 10%] Building CXX object compression/CMakeFiles/compression.dir/inflate_zstream.cpp.o
+[ 15%] Building CXX object compression/CMakeFiles/compression.dir/deflate_zstream.cpp.o
+[ 20%] Building CXX object compression/CMakeFiles/compression.dir/buffered_inflate_zstream.cpp.o
+[ 25%] Building CXX object compression/CMakeFiles/compression.dir/buffered_deflate_zstream.cpp.o
+[ 30%] Linking CXX shared library libcompression.so
+[ 30%] Built target compression
+[ 35%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression_utest_main.cpp.o
+[ 40%] Building CXX object compression/utest/CMakeFiles/utest.compression.dir/compression.test.cpp.o
+[ 45%] Linking CXX executable utest.compression
+[ 45%] Built target utest.compression
+[ 50%] Building CXX object zstream/utest/CMakeFiles/utest.zstream.dir/text.cpp.o
+[ 55%] Building CXX object zstream/utest/CMakeFiles/utest.zstream.dir/zstream_utest_main.cpp.o
+[ 60%] Building CXX object zstream/utest/CMakeFiles/utest.zstream.dir/zstream.test.cpp.o
+[ 65%] Building CXX object zstream/utest/CMakeFiles/utest.zstream.dir/zstreambuf.test.cpp.o
+[ 70%] Linking CXX executable utest.zstream
+[ 70%] Built target utest.zstream
+[ 75%] Building CXX object pyzstream/CMakeFiles/pyzstream.dir/pyzstream.cpp.o
+[ 80%] Linking CXX shared module pyzstream.cpython-310-x86_64-linux-gnu.so
+lto-wrapper: warning: using serial compilation of 3 LTRANS jobs
+lto-wrapper: note: see the '-flto' option documentation for more information
+[ 80%] Built target pyzstream
+[ 85%] Building CXX object app/hello/CMakeFiles/hello.dir/hello.cpp.o
+[ 90%] Linking CXX executable hello
+[ 90%] Built target hello
+[ 95%] Building CXX object app/myzip/CMakeFiles/myzip.dir/myzip.cpp.o
+[100%] Linking CXX executable myzip
+[100%] Built target myzip
+```
+
+Note:
+- pybind11 enables link-time optimization (it relies on it for performance reasons).
+  The `-fno-strict-aliasing` default we introduced in example 1b is pertinent here,
+  since link-time optimization increases the scope for bug-inducing compiler optimizations when codebase contains
+  a strict aliasing violation.
+
+Install:
+```
+$ cmake --install build
+-- Install configuration: ""
+-- Installing: /home/roland/scratch/include/compression
+-- Installing: /home/roland/scratch/include/compression/tostr.hpp
+-- Installing: /home/roland/scratch/include/compression/compression.hpp
+-- Installing: /home/roland/scratch/include/compression/buffered_deflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/base_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/buffered_inflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/inflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/buffer.hpp
+-- Installing: /home/roland/scratch/include/compression/deflate_zstream.hpp
+-- Installing: /home/roland/scratch/include/compression/span.hpp
+-- Installing: /home/roland/scratch/lib/libcompression.so.2
+-- Installing: /home/roland/scratch/lib/libcompression.so.2.3
+-- Set runtime path of "/home/roland/scratch/lib/libcompression.so.2" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/lib/libcompression.so
+-- Installing: /home/roland/scratch/include/zstream
+-- Installing: /home/roland/scratch/include/zstream/zstream.hpp
+-- Installing: /home/roland/scratch/include/zstream/zstreambuf.hpp
+-- Installing: /home/roland/scratch/lib/pyzstream.cpython-310-x86_64-linux-gnu.so
+-- Set runtime path of "/home/roland/scratch/lib/pyzstream.cpython-310-x86_64-linux-gnu.so" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/bin/hello
+-- Set runtime path of "/home/roland/scratch/bin/hello" to "/home/roland/scratch/lib"
+-- Installing: /home/roland/scratch/bin/myzip
+-- Set runtime path of "/home/roland/scratch/bin/myzip" to "/home/roland/scratch/lib"
+$ tree $PREFIX
+/home/roland/scratch
+|-- bin
+|   |-- hello
+|   `-- myzip
+|-- include
+|   |-- compression
+|   |   |-- base_zstream.hpp
+|   |   |-- buffer.hpp
+|   |   |-- buffered_deflate_zstream.hpp
+|   |   |-- buffered_inflate_zstream.hpp
+|   |   |-- compression.hpp
+|   |   |-- deflate_zstream.hpp
+|   |   |-- inflate_zstream.hpp
+|   |   |-- span.hpp
+|   |   `-- tostr.hpp
+|   `-- zstream
+|       |-- zstream.hpp
+|       `-- zstreambuf.hpp
+`-- lib
+    |-- libcompression.so -> libcompression.so.2.3
+    |-- libcompression.so.2
+    |-- libcompression.so.2.3 -> libcompression.so.2
+    `-- pyzstream.cpython-310-x86_64-linux-gnu.so
+```
+
+Remarks:
+- The pyzstream library `pyzstream.cpython-310-x86_64-linux-gnu.so` follows python naming conventions,
+  it will only be accepted by a python 3.10 interpreter.
+- pyzstream has a runtime dependency on `libcompression.so`:
+  ```
+  $ readelf -d $PREFIX/lib/pyzstream.cpython-310-x86_64-linux-gnu.so | grep NEEDED
+   0x0000000000000001 (NEEDED)             Shared library: [libcompression.so.2.3]
+   0x0000000000000001 (NEEDED)             Shared library: [libz.so.1]
+   0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+   0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+   0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+   0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+   0x0000000000000001 (NEEDED)             Shared library: [ld-linux-x86-64.so.2]
+  ```
+- The install step also patches the runtime path of pyzstream to `$PREFIX/lib`:
+  ```
+  $ readelf -d $PREFIX/lib/pyzstream.cpython-310-x86_64-linux-gnu.so | grep RUNPATH
+   0x000000000000001d (RUNPATH)            Library runpath: [/home/roland/scratch/lib:...]
+  ```
+  Later, when python dynamically loads pyzstream,  the loader will rely on `RUNPATH` to resolve `libcompression.so.2.3`
+
+Use from python:
+```
+$ PYTHONPATH=$PREFIX/lib:$PYTHONPATH
+$ python
+Python 3.10.13 (main, Aug 24 2023, 12:59:26) [GCC 12.2.0] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+>>> import pyzstream
+>>> zs=pyzstream.zstream(16*1024, "foo.gz", pyzstream.openmode.output)
+>>> zs
+<zstream>
+>>> zs.write("hello, there!\n")
+>>> zs.close()
+```
+
+The compressed binary is small enough to inspect:
+```
+$ od -x foo.gz
+0000000  8b1f  0008  0000  0000  0300  48cb  c9cd  d7c9
+0000020  2851  48c9  4a2d  e455  0002  f4ec  f918  000e
+0000040  0000
+0000042
+```
+
+Since it's in gzip format,  we can recover plain text with `gunzip`:
+```
+$ gunzip -c foo.gz
+hello, there!
+```
+
+or from python:
+```
+$ python
+>>> import pyzstream
+>>> zs=pyzstream.zstream(16*1024, "foo.gz", pyzstream.openmode.input)
+>>> zs.read(100)
+'hello, there!\n'
 ```
