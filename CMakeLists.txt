@@ -109,6 +109,7 @@ endif()
 
 # ----------------------------------------------------------------
 
+find_package(pybind11)
 find_package(Catch2 CONFIG REQUIRED)
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
@@ -126,6 +127,7 @@ add_subdirectory(compression)
 add_subdirectory(compression/utest)
 add_subdirectory(zstream)
 add_subdirectory(zstream/utest)
+add_subdirectory(pyzstream)
 add_subdirectory(app/hello)
 add_subdirectory(app/myzip)
 add_subdirectory(app/myzip/utest)
