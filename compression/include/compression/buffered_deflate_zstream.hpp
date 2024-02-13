@@ -8,7 +8,7 @@
  * Example
  *
  *   ifstream ucfs("path/to/uncompressedfile");
- *   buffered_deflate_zstream<char> zs;
+ *   buffered_deflate_zstream zs;
  *   ofstream zfs("path/to/compressedfile.z", ios::binary);
  *
  *   if (!ucfs)
