@@ -5,7 +5,7 @@
 /* Example
  *
  *   ifstream zfs("path/to/compressedfile.z", ios::binary);
- *   buffered_inflate_zstream<char> zs;
+ *   buffered_inflate_zstream zs;
  *   ofstream ucfs("path/to/uncompressedfile");
  *
  *   while (!zfs.eof()) {
