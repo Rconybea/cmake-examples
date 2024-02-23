@@ -140,8 +140,8 @@ public:
 
         std::swap(closed_flag_, x.closed_flag_);
 
-        std::swap(in_zs_, x.in_zs_);
-        std::swap(out_zs_, x.out_zs_);
+        ::swap(in_zs_, x.in_zs_);
+        ::swap(out_zs_, x.out_zs_);
 
         std::swap(native_sbuf_, x.native_sbuf_);
     }
@@ -461,11 +461,9 @@ private:
 
 using zstreambuf = basic_zstreambuf<char>;
 
-namespace std {
-    template <typename CharT, typename Traits>
-    void swap(basic_zstreambuf<CharT, Traits> & lhs,
-              basic_zstreambuf<CharT, Traits> & rhs)
-    {
-        lhs.swap(rhs);
-    }
+template <typename CharT, typename Traits>
+void swap(basic_zstreambuf<CharT, Traits> & lhs,
+          basic_zstreambuf<CharT, Traits> & rhs)
+{
+    lhs.swap(rhs);
 }

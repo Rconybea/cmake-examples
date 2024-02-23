@@ -93,9 +93,9 @@ public:
     size_type deflate_chunk(bool final_flag);
 
     void swap (buffered_deflate_zstream & x) {
-        std::swap(uc_in_buf_, x.uc_in_buf_);
-        std::swap(zs_algo_, x.zs_algo_);
-        std::swap(z_out_buf_, x.z_out_buf_);
+        ::swap(uc_in_buf_, x.uc_in_buf_);
+        ::swap(zs_algo_, x.zs_algo_);
+        ::swap(z_out_buf_, x.z_out_buf_);
     }
 
     buffered_deflate_zstream & operator= (buffered_deflate_zstream && x) {
@@ -117,11 +117,9 @@ private:
     buffer<std::uint8_t> z_out_buf_;
 }; /*buffered_deflate_zstream*/
 
-namespace std {
-    inline void
-    swap(buffered_deflate_zstream & lhs,
-         buffered_deflate_zstream & rhs)
-    {
-        lhs.swap(rhs);
-    }
+inline void
+swap(buffered_deflate_zstream & lhs,
+     buffered_deflate_zstream & rhs)
+{
+    lhs.swap(rhs);
 }

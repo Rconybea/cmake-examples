@@ -8,6 +8,8 @@
 #include <utility>
 #include <cstring>
 
+/* Shared base class for {deflate_zstream, inflate_zstream}
+ */
 class base_zstream {
 public:
     using span_type = span<std::uint8_t>;
@@ -43,6 +45,7 @@ public:
     }
 
 protected:
+    /* swap two base_zstream objects */
     void swap(base_zstream & x) {
         std::swap(zstream_, x.zstream_);
     }
@@ -61,3 +64,8 @@ protected:
     /* zlib control state.  contains heap-allocated memory */
     z_stream zstream_;
 };
+
+inline void
+swap(base_zstream & x, base_zstream & y) noexcept {
+    x.swap(y);
+}

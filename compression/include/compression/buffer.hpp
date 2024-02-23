@@ -130,10 +130,8 @@ private:
     size_type hi_pos_ = 0;
 };
 
-namespace std {
-    template <typename CharT>
-    inline void
-    swap(buffer<CharT> & lhs, buffer<CharT> & rhs) {
-        lhs.swap(rhs);
-    }
+template <typename CharT>
+inline void
+swap(buffer<CharT> & lhs, buffer<CharT> & rhs) {
+    lhs.swap(rhs);
 }

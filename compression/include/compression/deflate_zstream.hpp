@@ -41,9 +41,7 @@ public:
     }
 };
 
-namespace std {
-    inline void
-    swap(deflate_zstream & lhs, deflate_zstream & rhs) {
-        lhs.swap(rhs);
-    }
+inline void
+swap(deflate_zstream & lhs, deflate_zstream & rhs) noexcept {
+    lhs.swap(rhs);
 }
