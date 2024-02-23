@@ -44,17 +44,20 @@ deflate_zstream::deflate_chunk(bool final_flag) {
      *
      */
 
-    uint8_t * uc_pre = zstream_.next_in;
-    uint8_t * z_pre = zstream_.next_out;
+    z_stream * const pzs(p_native_zs_.get());
 
-    int err = ::deflate(&zstream_,
+    uint8_t * uc_pre = pzs->next_in;
+    uint8_t * z_pre = pzs->next_out;
+
+    int err = ::deflate(pzs,
                         (final_flag ? Z_FINISH : 0) /*flush*/);
 
-    if (err == Z_STREAM_ERROR)
+    if (err == Z_STREAM_ERROR) {
         throw runtime_error("basic_zstreambuf::sync: impossible zlib deflate returned Z_STREAM_ERROR");
+    }
 
-    uint8_t * uc_post = zstream_.next_in;
-    uint8_t * z_post = zstream_.next_out;
+    uint8_t * uc_post = pzs->next_in;
+    uint8_t * z_post = pzs->next_out;
 
     return pair<span_type, span_type>(span_type(uc_pre, uc_post),
                                       span_type(z_pre, z_post));
