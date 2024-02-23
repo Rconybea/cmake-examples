@@ -73,6 +73,8 @@ class basic_zstreambuf : public std::basic_streambuf<CharT, Traits> {
 public:
     using size_type = std::uint64_t;
     using int_type = typename Traits::int_type;
+    /* default buffer size for inflation/deflation (arbitrarily taking value from inflate side) */
+    static constexpr size_type c_default_buf_z = buffered_inflate_zstream::c_default_buf_z;
 
 public:
     basic_zstreambuf(size_type buf_z = 64 * 1024,

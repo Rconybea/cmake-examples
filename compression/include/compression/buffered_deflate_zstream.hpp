@@ -42,6 +42,8 @@ public:
     using z_span_type = span<std::uint8_t>;
     using size_type = std::uint64_t;
 
+    static constexpr size_type c_default_buf_z = 64UL * 1024UL;
+
 public:
     buffered_deflate_zstream(size_type buf_z = 64 * 1024,
                              size_type align_z = 1)

@@ -16,8 +16,8 @@
  */
 
 
-template<class Stream>
-Stream & tos(Stream & s) { return s; }
+//template<class Stream>
+//Stream & tos(Stream & s) { return s; }
 
 template <class Stream, typename T>
 Stream & tos(Stream & s, T && x) { s << x; return s; }
