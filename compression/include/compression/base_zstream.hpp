@@ -6,6 +6,7 @@
 #include <zlib.h>
 #include <ios>
 #include <utility>
+#include <memory>
 #include <cstring>
 
 /* Shared base class for {deflate_zstream, inflate_zstream}
