@@ -60,6 +60,8 @@ protected:
         return *this;
     }
 
+    friend void swap(base_zstream & x, base_zstream & y) noexcept;
+
 protected:
     /* zlib control state.  contains heap-allocated memory */
     z_stream zstream_;

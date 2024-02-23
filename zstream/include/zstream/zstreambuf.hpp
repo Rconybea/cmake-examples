@@ -43,7 +43,7 @@ operator<< (std::ostream & os, hex const & ins) {
     if (ins.with_char_) {
         os << "(";
         if (std::isprint(ins.x_))
-            os << (char)ins.x_;
+            os << static_cast<char>(ins.x_);
         else
             os << "?";
         os << ")";
