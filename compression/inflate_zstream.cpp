@@ -6,20 +6,7 @@
 using namespace std;
 
 inflate_zstream::inflate_zstream() {
-    zstream_.zalloc    = Z_NULL;
-    zstream_.zfree     = Z_NULL;
-    zstream_.opaque    = Z_NULL;
-    zstream_.avail_in  = 0;
-    zstream_.next_in   = Z_NULL;
-    zstream_.avail_out = 0;
-    zstream_.next_out  = Z_NULL;
-
-    //int ret = ::inflateInit(&zstream_);
-    int ret = ::inflateInit2(&zstream_,
-                             MAX_WBITS + 32 /* +32 tells zlib to detect zlib/gzip encoding + handle either*/);
-
-    if (ret != Z_OK)
-        throw std::runtime_error("inflate_zstream: failed to initialize .zstream");
+    this->setup();
 }
 
 inflate_zstream::~inflate_zstream() {
@@ -57,10 +44,12 @@ inflate_zstream::inflate_chunk () {
      *
      */
 
-    uint8_t * z_pre = zstream_.next_in;
-    uint8_t * uc_pre = zstream_.next_out;
+    z_stream * const pzs(p_native_zs_.get());
 
-    int err = ::inflate(&zstream_, Z_NO_FLUSH);
+    uint8_t * z_pre = pzs->next_in;
+    uint8_t * uc_pre = pzs->next_out;
+
+    int err = ::inflate(pzs, Z_NO_FLUSH);
 
     switch(err) {
     case Z_NEED_DICT:
@@ -71,8 +60,8 @@ inflate_zstream::inflate_chunk () {
         throw std::runtime_error(tostr("inflate_zstream::inflate_chunk: error [", err, "] from zlib inflate"));
     }
 
-    uint8_t * z_post = zstream_.next_in;
-    uint8_t * uc_post = zstream_.next_out;
+    uint8_t * z_post = pzs->next_in;
+    uint8_t * uc_post = pzs->next_out;
 
     return pair<span_type, span_type>(span_type(z_pre, z_post),
                                       span_type(uc_pre, uc_post));
