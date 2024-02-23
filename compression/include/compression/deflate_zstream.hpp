@@ -39,6 +39,12 @@ public:
         base_zstream::operator=(std::move(x));
         return *this;
     }
+
+private:
+    /* calls ::deflateInit2() */
+    void setup();
+    /* calls ::deflateEnd() */
+    void teardown();
 };
 
 inline void

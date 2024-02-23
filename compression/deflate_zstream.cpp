@@ -6,28 +6,11 @@ using namespace std;
 
 deflate_zstream::deflate_zstream()
 {
-    zstream_.zalloc    = Z_NULL;
-    zstream_.zfree     = Z_NULL;
-    zstream_.opaque    = Z_NULL;
-    zstream_.avail_in  = 0;
-    zstream_.next_in   = Z_NULL;
-    zstream_.avail_out = 0;
-    zstream_.next_out  = Z_NULL;
-
-    //int ret = ::deflateInit(&zstream_, Z_DEFAULT_COMPRESSION);
-    int ret = ::deflateInit2(&zstream_,
-                             Z_DEFAULT_COMPRESSION,
-                             Z_DEFLATED,
-                             MAX_WBITS + 16 /* +16 tells zlib to write .gzip header*/,
-                             8 /*memlevel 1-9; higher to spend memory for more speed+compression. default=8*/,
-                             Z_DEFAULT_STRATEGY);
-
-    if (ret != Z_OK)
-        throw runtime_error("deflate_zstream: failed to initialize .zstream");
+    this->setup();
 }
 
 deflate_zstream::~deflate_zstream() {
-    ::deflateEnd(&zstream_);
+    this->teardown();
 }
 
 pair<span<uint8_t>, span<uint8_t>>
@@ -76,3 +59,32 @@ deflate_zstream::deflate_chunk(bool final_flag) {
     return pair<span_type, span_type>(span_type(uc_pre, uc_post),
                                       span_type(z_pre, z_post));
 }
+
+void
+deflate_zstream::setup() {
+    z_stream * const pzs(p_native_zs_.get());
+
+    pzs->zalloc    = Z_NULL;
+    pzs->zfree     = Z_NULL;
+    pzs->opaque    = Z_NULL;
+    pzs->avail_in  = 0;
+    pzs->next_in   = Z_NULL;
+    pzs->avail_out = 0;
+    pzs->next_out  = Z_NULL;
+
+    int ret = ::deflateInit2(pzs,
+                             Z_DEFAULT_COMPRESSION,
+                             Z_DEFLATED,
+                             MAX_WBITS + 16 /* +16 tells zlib to write .gzip header*/,
+                             8 /*memlevel 1-9; higher to spend memory for more speed+compression. default=8*/,
+                             Z_DEFAULT_STRATEGY);
+
+    if (ret != Z_OK)
+        throw runtime_error("deflate_zstream: failed to initialize .p_native_zs");
+}
+
+void
+deflate_zstream::teardown() {
+    ::deflateEnd(p_native_zs_.get());
+}
+

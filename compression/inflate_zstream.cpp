@@ -23,7 +23,7 @@ inflate_zstream::inflate_zstream() {
 }
 
 inflate_zstream::~inflate_zstream() {
-    ::inflateEnd(&zstream_);
+    this->teardown();
 }
 
 std::pair<span<std::uint8_t>, span<std::uint8_t>>
@@ -77,3 +77,28 @@ inflate_zstream::inflate_chunk () {
     return pair<span_type, span_type>(span_type(z_pre, z_post),
                                       span_type(uc_pre, uc_post));
 }
+
+void
+inflate_zstream::setup() {
+    z_stream * const pzs(p_native_zs_.get());
+
+    pzs->zalloc    = Z_NULL;
+    pzs->zfree     = Z_NULL;
+    pzs->opaque    = Z_NULL;
+    pzs->avail_in  = 0;
+    pzs->next_in   = Z_NULL;
+    pzs->avail_out = 0;
+    pzs->next_out  = Z_NULL;
+
+    int ret = ::inflateInit2(pzs,
+                             MAX_WBITS + 32 /* +32 tells zlib to detect zlib/gzip encoding + handle either*/);
+
+    if (ret != Z_OK)
+        throw std::runtime_error("inflate_zstream: failed to initialize .zstream");
+}
+
+void
+inflate_zstream::teardown() {
+    ::inflateEnd(p_native_zs_.get());
+}
+

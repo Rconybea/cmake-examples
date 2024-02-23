@@ -35,6 +35,12 @@ public:
         base_zstream::operator=(std::move(x));
         return *this;
     }
+
+private:
+    /* calls ::inflateInit2() */
+    void setup();
+    /* calls ::inflateEnd() */
+    void teardown();
 };
 
 inline void
