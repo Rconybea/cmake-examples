@@ -42,11 +42,17 @@ public:
     using z_span_type = span<std::uint8_t>;
     using size_type = std::uint64_t;
 
+    static constexpr size_type c_default_buf_z = 64UL * 1024UL;
+
 public:
-    buffered_deflate_zstream(size_type buf_z = 64 * 1024,
+    /* buf_z :    buffer size for compressed + uncompressed input.
+     *            If 0,  defer allocation
+     * align_z :  alignment for uncompressed output,  if allocating.  Otherwise ignored.
+     */
+    buffered_deflate_zstream(size_type buf_z = c_default_buf_z,
                              size_type align_z = 1)
         : uc_in_buf_{buf_z, align_z},
-          z_out_buf_{buf_z, align_z}
+          z_out_buf_{buf_z, sizeof(std::uint8_t)}
         {
             zs_algo_.provide_output(z_out_buf_.avail());
         }
@@ -56,7 +62,9 @@ public:
 
     /* space available for more uncompressed output (input of this object) */
     z_span_type uc_avail() const { return uc_in_buf_.avail(); }
-    /* spaec available for more compressed output */
+    /* uncompressed content buffered for compression (see .uc_produce()) */
+    z_span_type uc_contents() const { return uc_in_buf_.contents(); }
+    /* space available for more compressed output */
     z_span_type z_avail() const { return z_out_buf_.avail(); }
     /* compressed content available */
     z_span_type z_contents() const { return z_out_buf_.contents(); }
@@ -89,13 +97,18 @@ public:
 
     void z_consume_all() { this->z_consume(this->z_contents()); }
 
-    /* return #of bytes compressed output available */
+    /* deflate some portion of uncompressed input buffer.
+     *
+     * final_flag: must be set exactly once on last call for an output,  to flush any partially compressed state.
+     *
+     * return #of bytes compressed output available
+     */
     size_type deflate_chunk(bool final_flag);
 
     void swap (buffered_deflate_zstream & x) {
-        std::swap(uc_in_buf_, x.uc_in_buf_);
-        std::swap(zs_algo_, x.zs_algo_);
-        std::swap(z_out_buf_, x.z_out_buf_);
+        ::swap(uc_in_buf_, x.uc_in_buf_);
+        ::swap(zs_algo_, x.zs_algo_);
+        ::swap(z_out_buf_, x.z_out_buf_);
     }
 
     buffered_deflate_zstream & operator= (buffered_deflate_zstream && x) {
@@ -117,11 +130,9 @@ private:
     buffer<std::uint8_t> z_out_buf_;
 }; /*buffered_deflate_zstream*/
 
-namespace std {
-    inline void
-    swap(buffered_deflate_zstream & lhs,
-         buffered_deflate_zstream & rhs)
-    {
-        lhs.swap(rhs);
-    }
+inline void
+swap(buffered_deflate_zstream & lhs,
+     buffered_deflate_zstream & rhs)
+{
+    lhs.swap(rhs);
 }

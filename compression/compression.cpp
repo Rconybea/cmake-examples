@@ -142,7 +142,7 @@ compression::inflate_file(std::string const & in_file,
     if (!fs)
         throw std::runtime_error("unable to open input file");
 
-    buffered_inflate_zstream zstate;
+    buffered_inflate_zstream zstate(buffered_inflate_zstream::c_default_buf_z);
 
     /* write uncompressed output */
     ofstream ucfs(out_file, ios::out|ios::binary);
