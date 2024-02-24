@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#
+# pyzstream test runner
+
+projbindir=@PROJECT_BINARY_DIR@
+srcdir=@CMAKE_CURRENT_SOURCE_DIR@
+
+# build directory that contains pyzstream .so
+pyzstream_libdir=${projbindir}/pyzstream
+
+export PYTHONPATH=${pyzstream_libdir}:${PYTHONPATH}
+
+python ${srcdir}/pyzstream.utest.py $@

@@ -109,7 +109,13 @@ endif()
 
 # ----------------------------------------------------------------
 
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11)
+message("-- Python_VERSION=${Python_VERSION}")
+#message("Python_VERSION_MAJOR=${Python_VERSION_MAJOR}")
+#message("Python_VERSION_MINOR=${Python_VERSION_MINOR}")
+set(PYTHON_LIBRARY_PREFIX ${Python_VERSION_MAJOR}.${Python_VERSION_MINOR})
+
 find_package(Catch2 CONFIG REQUIRED)
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
@@ -128,6 +134,7 @@ add_subdirectory(compression/utest)
 add_subdirectory(zstream)
 add_subdirectory(zstream/utest)
 add_subdirectory(pyzstream)
+add_subdirectory(pyzstream/utest)
 add_subdirectory(app/hello)
 add_subdirectory(app/myzip)
 add_subdirectory(app/myzip/utest)

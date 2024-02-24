@@ -6,6 +6,7 @@ namespace py = pybind11;
 using namespace std;
 
 PYBIND11_MODULE(pyzstream, m) {
+    // see pybind11/pytypes.h for c++ class wrappers for specific builtin python types
     // see https://docs.python.org/3/library/operator.html#mapping-operators-to-functions
 
     m.doc() = "pybind11 plugin for zstream";
