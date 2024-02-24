@@ -43,7 +43,7 @@ operator<< (std::ostream & os, hex const & ins) {
     if (ins.with_char_) {
         os << "(";
         if (std::isprint(ins.x_))
-            os << (char)ins.x_;
+            os << static_cast<char>(ins.x_);
         else
             os << "?";
         os << ")";
@@ -71,18 +71,37 @@ operator<< (std::ostream & os, hex_view const & ins) {
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstreambuf : public std::basic_streambuf<CharT, Traits> {
 public:
+    /* Traits must provide:  char_type, int_type, off_type, pos_type, state_type */
+
     using size_type = std::uint64_t;
+    using char_type = CharT; // = Traits::char_type
     using int_type = typename Traits::int_type;
+    using off_type = typename Traits::off_type;
+    using pos_type = typename Traits::pos_type;
+    using native_handle_type = int;
+
+    /* default buffer size for inflation/deflation (arbitrarily taking value from inflate side) */
+    static constexpr size_type c_default_buf_z = buffered_inflate_zstream::c_default_buf_z;
 
 public:
+    /* Taking care with alignment: if CharT is a wide character type,  probably want/need aligned buffers
+     * for uncompressed data.
+     *
+     * buf_z : buffer size for inflation/deflation algorithm.  Buffer memory consumption is 4x this value.
+     *         Allocating memory separately for input (.in_zs), output (.out_zs):
+     *         - .in_zs.z_in_buf buffer compressed input
+     *         - .in_zs.uc_out_buf buffer uncompressed input
+     *         - .out_zs.uc_in_buf buffer uncompressed output
+     *         - .out_zs.z_out_buf buffer compressed output
+     *         Can use 0 to defer buffer allocation
+     */
     basic_zstreambuf(size_type buf_z = 64 * 1024,
                      std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>(),
                      std::ios::openmode mode = std::ios::in)
-        :
-        openmode_{mode},
-        in_zs_{aligned_upper_bound(buf_z), alignment()},
-        out_zs_{aligned_upper_bound(buf_z), alignment()},
-        native_sbuf_{std::move(native_sbuf)}
+        : openmode_{mode},
+          in_zs_{aligned_upper_bound(buf_z), alignment()},
+          out_zs_{aligned_upper_bound(buf_z), alignment()},
+          native_sbuf_{std::move(native_sbuf)}
     {
         this->setg_span(in_zs_.uc_contents());
         this->setp_span(out_zs_.uc_avail());
@@ -112,6 +131,9 @@ public:
 
             this->closed_flag_ = true;
 
+            this->in_uc_pos_ = 0;
+            this->out_uc_pos_ = 0;
+
             /* .native_sbuf may need to flush (e.g. if it's actually a filebuf).
              * The only way to invoke that behavior through the basic_streambuf api
              * is to invoke destructor,  so that's what we do here
@@ -126,6 +148,10 @@ public:
         std::basic_streambuf<CharT, Traits>::operator=(x);
 
         closed_flag_ = x.closed_flag_;
+
+        in_uc_pos_ = x.in_uc_pos_;
+        out_uc_pos_ = x.out_uc_pos_;
+
         in_zs_ = std::move(x.in_zs_);
         out_zs_ = std::move(x.out_zs_);
 
@@ -140,8 +166,11 @@ public:
 
         std::swap(closed_flag_, x.closed_flag_);
 
-        std::swap(in_zs_, x.in_zs_);
-        std::swap(out_zs_, x.out_zs_);
+        std::swap(in_uc_pos_, x.in_uc_pos_);
+        std::swap(out_uc_pos_, x.out_uc_pos_);
+
+        ::swap(in_zs_, x.in_zs_);
+        ::swap(out_zs_, x.out_zs_);
 
         std::swap(native_sbuf_, x.native_sbuf_);
     }
@@ -182,8 +211,13 @@ protected:
 
         std::streambuf * nsbuf = native_sbuf_.get();
 
+        /* read position associated with start of buffer needs to include
+         * buffer extent that we're about to replace
+         */
+        in_uc_pos_ += in_zs_.uc_contents().size();
+
         /* any previous output from .in_zs must have already been consumed (otherwise not in underflow state) */
-        in_zs_.uc_consume_all();
+        in_zs_.uc_consume(in_zs_.uc_contents());
 
         while (true) {
             /* zspan: available (unused) buffer space for compressed input */
@@ -286,6 +320,8 @@ protected:
                 ::memcpy(this->pptr(), s, n_copy);
                 this->pbump(n_copy);
 
+                this->out_uc_pos_ += n_copy;
+
                 s += n_copy;
                 n -= n_copy;
             }
@@ -296,19 +332,69 @@ protected:
         return n_arg;
     }
 
-    virtual int_type
-    overflow(int_type new_ch) override final {
-        if (this->sync() != 0) {
-            throw std::runtime_error("basic_zstreambuf::overflow: sync failed to create buffer space");
-        };
+    /* offset:  taken relative to argument way
+     * way:     ios_base::beg | ios_base::cur | ios_base::end
+     * which:   ios_base::in | ios_base::out
+     */
+    virtual pos_type seekoff(off_type offset,
+                             std::ios_base::seekdir way,
+                             std::ios_base::openmode which) override final
+        {
+            /* Infeasible to implement this in general
+             * (at least without intimate understanding of deflated zlib format).
+             *
+             * Do need to implement special case offset=0,
+             * since iostream uses this to implement .tellg() + .tellp()
+             *
+             * Can possibly implement some other special cases with effort,  see TODO below
+             */
+            if ((offset == 0)
+                && (way == std::ios_base::cur))
+            {
+                /* here: not attempting to change stream positioning */
 
-        if (Traits::eq_int_type(new_ch, Traits::eof()) != true) {
-            *(this->pptr()) = Traits::to_char_type(new_ch);
-            this->pbump(1);
+                if ((which & std::ios_base::out) == std::ios_base::out) {
+                    return this->out_uc_pos_;
+                } else {
+                    return this->in_uc_pos_ + this->gptr() - this->eback();
+                }
+            }
+
+            /* TODO: feasible to implement:
+             *
+             * - seek input to any position p,  with caveats:
+             *   - seek forward from current position cost O(p - cur)
+             *     since have to run subseq(cur..p) through inflation algorithm
+             *   - seek backward from current position cost O(p),
+             *     since have to restart from beginning of input stream,
+             *     and (re)inflate subseq(0..p)
+             * - seek output to position 0:
+             *   - equivalent to discarding output + restarting compression
+             *   - anything else considered too expensive (absent moving to
+             *     some bespoke block-based format), since would have to rebuild compressed stream
+             *     from scratch
+             */
+
+            return -1;
         }
+
+    /* in practice this won't be used,  because .xsputn() calls .sync() as needed */
+#ifdef NOT_IN_USE
+    virtual int_type
+    overflow(int_type new_ch) override final
+        {
+            if (this->sync() != 0) {
+                throw std::runtime_error("basic_zstreambuf::overflow: sync failed to create buffer space");
+            };
+
+            if (Traits::eq_int_type(new_ch, Traits::eof()) != true) {
+                *(this->pptr()) = Traits::to_char_type(new_ch);
+                this->pbump(1);
+            }
 
         return new_ch;
     }
+#endif
 
 private:
     /* write contents of .output to .native_sbuf.
@@ -338,14 +424,15 @@ private:
 
         std::streambuf * nsbuf = native_sbuf_.get();
 
-        /* consume all available uncompressed output
+        /* Consume (i.e. deflate) all collected uncompressed output
+         * We've contrived for this->pbase() .. this->pptr() to always refer to some subrange of
+         * .out_zs.uc_in_buf;  the uc_produce() call needs only update .out_zs.uc_in_buf.hi_pos
          *
          * note: converting from CharT* -> uint8_t* ok here.
          *       we are always starting with a properly-CharT*-aligned value,
          *       and in any case destination pointer used only with deflate(),
          *       which imposes no alignment requirements
          */
-
         out_zs_.uc_produce(span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(this->pbase()),
                                               reinterpret_cast<std::uint8_t *>(this->pptr())));
 
@@ -441,6 +528,20 @@ private:
     /* set irrevocably on .close() */
     bool closed_flag_ = false;
 
+    /* input position,  relative to beginning of stream,  EXCEPT
+     * EXCLUDES range [.eback .. .gptr],  since .gptr may update non-virtually between calls
+     * to .underflow()
+     */
+    pos_type in_uc_pos_ = 0;
+
+    /* output position, relative to beginning of stream.
+     *
+     * note: We want this to update on every call to .xsputn().
+     *       Bundling into .out_zs won't work,  because .xsputn()
+     *       doesn't always invoke any .out_zs methods (instead may just does .pbump)
+     */
+    pos_type out_uc_pos_ = 0;
+
     /* reminder:
      * 1. .eback() <= .gptr() <= .egptr()
      * 2. input buffer pointers .eback() .gptr() .egptr() are owned by basic_streambuf,
@@ -461,11 +562,9 @@ private:
 
 using zstreambuf = basic_zstreambuf<char>;
 
-namespace std {
-    template <typename CharT, typename Traits>
-    void swap(basic_zstreambuf<CharT, Traits> & lhs,
-              basic_zstreambuf<CharT, Traits> & rhs)
-    {
-        lhs.swap(rhs);
-    }
+template <typename CharT, typename Traits>
+void swap(basic_zstreambuf<CharT, Traits> & lhs,
+          basic_zstreambuf<CharT, Traits> & rhs)
+{
+    lhs.swap(rhs);
 }
