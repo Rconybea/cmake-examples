@@ -19,6 +19,28 @@
  *
  *
  * buffer does not support wrapped content
+ *
+ * Example:
+ * 1.
+ *   buffer<char> buf(64*1024);
+ *   buf.empty() -> true
+ *   buf.buf_z() -> 65536
+ *   buf.lo_pos() -> 0
+ *   buf.hi_pos() -> 65536
+ *   buf.contents() -> empty span
+ *   buf.avail() -> span entire buffer memory
+ *
+ * 2.
+ *   buffer<char> buf;
+ *   buf.empty() -> true
+ *   buf.buf_z() -> 0
+ *   buf.lo_pos() -> 0
+ *   buf.hi_pos() -> 0
+ *   buf.contents() -> empty span
+ *   buf.avail() -> empty span
+ *
+ *   buf.alloc(64*1024);
+ *
  */
 template <typename CharT>
 class buffer {
@@ -27,13 +49,15 @@ public:
     using size_type = std::uint64_t;
 
 public:
+    buffer() = default;
     buffer(size_type buf_z, size_type align_z = sizeof(char))
         : is_owner_{true},
-          buf_{new (std::align_val_t(align_z)) CharT [buf_z]},
+          buf_{buf_z ? (new (std::align_val_t(align_z)) CharT [buf_z]) : nullptr},
           buf_z_{buf_z},
-          lo_pos_{0}, hi_pos_{0}
- {}
-    ~buffer() { this->clear(); }
+          lo_pos_{0},
+          hi_pos_{0}
+        {}
+    ~buffer() { this->reset(); }
 
     CharT * buf() const { return buf_; }
     size_type buf_z() const { return buf_z_; }
@@ -47,12 +71,14 @@ public:
 
     bool empty() const { return lo_pos_ == hi_pos_; }
 
+    /* append contents of span to buffer, starting at .hi_pos */
     void produce(span_type const & span) {
         assert(span.lo() == buf_ + hi_pos_);
 
         hi_pos_ += span.size();
     }
 
+    /* remove contents of span from buffer, starting at .lo_pos */
     void consume(span_type const & span) {
         if (span.size()) {
             assert(span.lo() == buf_ + lo_pos_);
@@ -72,8 +98,8 @@ public:
     }
 
     void setbuf(CharT * buf, size_type buf_z) {
-        /* properly reset any existing state */
-        this->clear();
+        /* properly reset (+ discard) any existing state */
+        this->reset();
 
         is_owner_ = false;
         lo_pos_ = 0;
@@ -90,8 +116,8 @@ public:
         std::swap(hi_pos_, x.hi_pos_);
     }
 
-    void clear() {
-        if (is_owner_)
+    void reset() {
+        if (is_owner_ && buf_)
             delete [] buf_;
 
         is_owner_ = false;
