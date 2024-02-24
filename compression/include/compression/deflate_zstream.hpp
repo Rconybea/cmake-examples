@@ -18,6 +18,8 @@ public:
 
 public:
     deflate_zstream();
+    /* move-only */
+    deflate_zstream(deflate_zstream const & x) = delete;
     ~deflate_zstream();
 
     /* compress some output,  return #of compressed bytes obtained

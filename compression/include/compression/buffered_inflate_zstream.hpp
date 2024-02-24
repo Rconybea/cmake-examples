@@ -38,6 +38,8 @@ public:
         {
             zs_algo_.provide_output(uc_out_buf_.avail());
         }
+    /* not copyable (since .inflate_zstream isn't) */
+    buffered_inflate_zstream(buffered_inflate_zstream const & x) = delete;
 
     std::uint64_t n_in_total() const { return zs_algo_.n_in_total(); }
     std::uint64_t n_out_total() const { return zs_algo_.n_out_total(); }

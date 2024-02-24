@@ -17,6 +17,8 @@ public:
 
 public:
     inflate_zstream();
+    /* move-only */
+    inflate_zstream(inflate_zstream const & x) = delete;
     ~inflate_zstream();
 
     /* uncompress some input.
