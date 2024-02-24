@@ -14,38 +14,81 @@ PYBIND11_MODULE(pyzstream, m) {
     /* wrap ios::openmode */
     py::class_<std::ios::openmode>(m, "openmode")
         /* note: 'in' is a keyword in python, can't use here */
-        .def_property_readonly_static("input", [](py::object /*self*/) { return std::ios::in; })
-        .def_property_readonly_static("output", [](py::object /*self*/) { return std::ios::out; })
-        .def_property_readonly_static("binary", [](py::object /*self*/) { return std::ios::binary; })
-        .def("__or__", [](std::ios::openmode x, std::ios::openmode y) { return x|y; })
-        .def("__and__", [](std::ios::openmode x, std::ios::openmode y) { return x&y; })
+        .def_property_readonly_static("none",
+                                      [](py::object /*self*/) { return std::ios::openmode(0); },
+                                      py::doc("openmode with no bits set"))
+        .def_property_readonly_static("all",
+                                      [](py::object /*self*/) { return std::ios::in | std::ios::out | std::ios::binary; },
+                                      py::doc("openmode with all bits set"))
+        .def_property_readonly_static("input",
+                                      [](py::object /*self*/) { return std::ios::in; },
+                                      py::doc("set this bit to enable stream for input i/o"))
+        .def_property_readonly_static("output",
+                                      [](py::object /*self*/) { return std::ios::out; },
+                                      py::doc("set this bit to enable stream for output i/o"))
+        .def_property_readonly_static("binary",
+                                      [](py::object /*self*/) { return std::ios::binary; },
+                                      py::doc("set this bit to operate stream in binary mode"
+                                              " (disables automatic character processing)"))
+        .def("__eq__",
+             [](std::ios::openmode x, std::ios::openmode y) { return x==y; },
+             py::arg("other"),
+             py::doc("True if bitmask self equals bitmask other; otherwise False"))
+        .def("__ne__", [](std::ios::openmode x, std::ios::openmode y) { return x!=y; },
+             py::arg("other"),
+             py::doc("True if bitmask self not equal to bitmask other; otherwise False"))
+        .def("__or__",
+             [](std::ios::openmode x, std::ios::openmode y) { return x|y; },
+             py::arg("other"),
+             py::doc("bitmask with bit set whenever that bit is set in either self or other"))
+        .def("__and__",
+             [](std::ios::openmode x, std::ios::openmode y) { return x&y; },
+             py::arg("other"),
+             py::doc("bitmask with bit set whenever that bit is set in both self and other"))
+        .def("__xor__",
+             [](std::ios::openmode x, std::ios::openmode y) { return x^y; },
+             py::arg("other"),
+             py::doc("bitmask with bit set when, and only when, that bit is set in exactly one of {self, other}"))
+        .def("__invert__",
+             [](std::ios::openmode x) {
+                 /* keep only bits we're exposing: in, out, binary */
+                 return  ~x & (std::ios::in | std::ios::out | std::ios::binary); },
+             py::doc("openmode bitmask with bit set when, and only when, that bit is not set in self"))
         .def("__repr__",
              [](std::ios::openmode & self)
                  {
                      std::stringstream ss;
 
-                     ss << "<openmode ";
-                     std::size_t nset = 0;
-                     if (self & std::ios::in) {
-                         ++nset;
-                         ss << "input";
+                     ss << "<openmode";
+
+                     if (self != 0) {
+                         ss << " ";
+
+                         std::size_t nset = 0;
+                         if (self & std::ios::in) {
+                             ++nset;
+                             ss << "input";
+                         }
+                         if (self & std::ios::out) {
+                             if (nset)
+                                 ss << "|";
+                             ++nset;
+                             ss << "output";
+                         }
+                         if (self & std::ios::binary) {
+                             if (nset)
+                                 ss << "|";
+                             ++nset;
+                             ss << "binary";
+                         }
                      }
-                     if (self & std::ios::out) {
-                         if (nset)
-                             ss << "|";
-                         ++nset;
-                         ss << "output";
-                     }
-                     if (self & std::ios::binary) {
-                         if (nset)
-                             ss << "|";
-                         ++nset;
-                         ss << "binary";
-                     }
+
                      ss << ">";
 
                      return ss.str();
-                 })
+                 },
+             py::doc("Get human-readable string representation,"
+                     " for example '<openmode input|output|binary>'"))
         ;
 
     /* The c++ style of iostream reading won't map nicely to python,
@@ -57,7 +100,29 @@ PYBIND11_MODULE(pyzstream, m) {
      * Expect to wrap pyzstream into a python class that inherits from the python File class
      */
     py::class_<zstream>(m, "zstream")
-        .def(py::init<std::streamsize, char const *, std::ios::openmode>())
+        .def(py::init<std::streamsize, char const *, std::ios::openmode>(),
+             py::arg("bufz") = zstream::c_default_buffer_size,
+             py::arg("filename") = "",
+             py::arg("openmode") = std::ios::in,
+             py::doc("Create zstream instance.\n"
+                     "Allocate 4x bufz bytes for buffer space,"
+                     " for {input, output} x {compressed, uncompressed}.\n"
+                     "If filename provided, attach to compressed file with that name.\n"
+                     "Openmode bitmask enables resulting stream for input and/or output.\n"
+                 ))
+        .def("openmode",
+             &zstream::openmode,
+             py::doc("Mode bitmask.\n"
+                     "Combination of input|output|binary."))
+        .def("eof",
+             [](zstream & zs) { return zs.eof(); },
+             py::doc("True if and only if input stream has reached end of file."))
+        .def("tellg",
+             [](zstream & zs) -> int64_t { return zs.tellg(); },
+             py::doc("return current get position (position relative to 0=start for input sequence"))
+        .def("tellp",
+             [](zstream & zs) -> int64_t { return zs.tellp(); },
+             py::doc("return current put position (position relative to 0=start for output sequence"))
         .def("read",
              [](zstream & zs, std::streamsize z)
                  {

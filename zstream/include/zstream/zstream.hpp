@@ -72,6 +72,8 @@ public:
     ~basic_zstream() = default;
 
     zstreambuf_type * rdbuf() { return &rdbuf_; }
+    std::ios::openmode openmode() const { return rdbuf_.openmode(); }
+    // bool eof() const;   // editor bait: inherited
 
     /* move-assignment */
     basic_zstream & operator=(basic_zstream && x) {
