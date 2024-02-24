@@ -101,7 +101,7 @@ public:
         : openmode_{mode},
           in_zs_{aligned_upper_bound(buf_z), alignment()},
           out_zs_{aligned_upper_bound(buf_z), alignment()},
-          native_sbuf_{std::move(native_sbuf)},
+          native_sbuf_{std::move(native_sbuf)}
     {
         this->setg_span(in_zs_.uc_contents());
         this->setp_span(out_zs_.uc_avail());
