@@ -20,6 +20,12 @@ class Test_openmode(unittest.TestCase):
     def test_eq(self):
         from pyzstream import openmode
 
+        self.assertTrue(openmode.none == openmode.none)
+        self.assertTrue(openmode.input == openmode.input)
+        self.assertTrue(openmode.output == openmode.output)
+        self.assertTrue(openmode.binary == openmode.binary)
+
+        self.assertFalse(openmode.none == openmode.input)
         self.assertFalse(openmode.input == openmode.output)
         self.assertFalse(openmode.input == openmode.binary)
         self.assertFalse(openmode.output == openmode.binary)
@@ -28,6 +34,37 @@ class Test_openmode(unittest.TestCase):
                          == openmode.input | openmode.output)
         self.assertFalse(openmode.output
                          == openmode.input | openmode.output)
+        self.assertTrue(openmode.input | openmode.output
+                        == openmode.input | openmode.output)
+
+    def test_and(self):
+        from pyzstream import openmode
+
+        self.assertEqual(openmode.input & openmode.output,
+                         openmode.none)
+        self.assertEqual(openmode.input & openmode.input,
+                         openmode.input)
+        self.assertEqual(openmode.input & (openmode.input | openmode.output),
+                         openmode.input)
+        self.assertEqual(openmode.output & (openmode.input | openmode.output),
+                         openmode.output)
+
+    def test_xor(self):
+        from pyzstream import openmode
+
+        self.assertEqual(openmode.input ^ openmode.input,
+                         openmode.none)
+        self.assertEqual(openmode.input ^ openmode.output,
+                         openmode.input | openmode.output)
+
+    def test_invert(self):
+        from pyzstream import openmode
+
+        self.assertEqual(~openmode.none, openmode.all)
+        self.assertEqual(~openmode.all, openmode.none)
+        self.assertEqual(~openmode.input, openmode.output | openmode.binary)
+        self.assertEqual(~(openmode.input | openmode.binary), openmode.output)
+
 
 # Test pybind11-mediated zstream
 #
@@ -54,8 +91,14 @@ class Test_zstream(unittest.TestCase):
                                "empty.gz",
                                openmode.output)
 
+        self.assertEqual(zs.openmode(), openmode.output)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
         zs.close()
 
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
 
         # expect file empty.gz with just zlib header (20 bytes)
         with subprocess.Popen(["gunzip", "-c", "empty.gz"], shell=False, stdout=subprocess.PIPE) as subp:
@@ -78,11 +121,19 @@ class Test_zstream(unittest.TestCase):
                                "hello.gz",
                                openmode.output)
 
+        self.assertEqual(zs.openmode(), openmode.output)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
         s = 'hello, world!\n'
         n = zs.write(s)
 
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), n)
         zs.close()
 
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
         # expect file hello.gz containing 'hello, world\n' (34 bytes 'compressed')
         with subprocess.Popen(["gunzip", "-c", "hello.gz"], shell=False, stdout=subprocess.PIPE) as subp:
             s2 = subp.stdout.readline()
@@ -103,25 +154,43 @@ class Test_zstream(unittest.TestCase):
                                "hello.gz",
                                openmode.output)
 
+        self.assertEqual(zs.openmode(), openmode.output)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
         s = 'hello, world!\n'
         n = zs.write(s)
 
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), n)
         zs.close()
 
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
         # reopen stream,  this time for reading
 
         zs = pyzstream.zstream(16384,
                                "hello.gz",
                                openmode.input)
         # zs.open('hello.gz', openmode.input)
+        self.assertEqual(zs.openmode(), openmode.input)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
 
         s2 = zs.read(32)
         #s2=zs.readline()
 
         self.assertEqual(s2, s)
+        self.assertEqual(zs.tellg(), n)
+        self.assertEqual(zs.tellp(), 0)
 
         s2 = zs.read(32)
         #s2=zs.readline()
+        self.assertEqual(zs.openmode(), openmode.input)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), n)
+        self.assertEqual(zs.tellp(), 0)
 
         self.assertEqual(s2, '')
 
