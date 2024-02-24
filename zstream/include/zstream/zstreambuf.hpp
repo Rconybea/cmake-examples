@@ -110,6 +110,7 @@ public:
         this->close();
     }
 
+    std::ios::openmode openmode() const { return openmode_; }
     std::uint64_t n_z_in_total() const { return in_zs_.n_in_total(); }
     /* note: z input side of zstreambuf = output from inflating-zstream */
     std::uint64_t n_uc_in_total() const { return in_zs_.n_out_total(); }
