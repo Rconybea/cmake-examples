@@ -8,8 +8,10 @@ TEST_CASE("zstream", "[zstream]") {
     /* true to enable some logging,  useful if this unit test should fail */
     constexpr bool c_debug_flag = false;
 
+    constexpr size_t c_buf_z = 64*1024;
+
     /* make some buffer space */
-    using zbuf_type = array<char, 64*1024>;
+    using zbuf_type = array<char, c_buf_z>;
     unique_ptr<zbuf_type> zbuf(new zbuf_type());
     std::fill(zbuf->begin(), zbuf->end(), '\0');
 

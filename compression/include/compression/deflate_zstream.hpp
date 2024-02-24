@@ -18,6 +18,8 @@ public:
 
 public:
     deflate_zstream();
+    /* move-only */
+    deflate_zstream(deflate_zstream const & x) = delete;
     ~deflate_zstream();
 
     /* compress some output,  return #of compressed bytes obtained
@@ -39,11 +41,15 @@ public:
         base_zstream::operator=(std::move(x));
         return *this;
     }
+
+private:
+    /* calls ::deflateInit2() */
+    void setup();
+    /* calls ::deflateEnd() */
+    void teardown();
 };
 
-namespace std {
-    inline void
-    swap(deflate_zstream & lhs, deflate_zstream & rhs) {
-        lhs.swap(rhs);
-    }
+inline void
+swap(deflate_zstream & lhs, deflate_zstream & rhs) noexcept {
+    lhs.swap(rhs);
 }
