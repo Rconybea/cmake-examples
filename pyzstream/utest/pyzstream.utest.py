@@ -1,7 +1,7 @@
 # python script to exercise zstream
 
 import pyzstream
-import zstream
+#import zstream
 import array
 import subprocess
 import unittest

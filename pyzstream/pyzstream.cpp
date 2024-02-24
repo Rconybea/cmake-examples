@@ -85,7 +85,7 @@ PYBIND11_MODULE(pyzstream, m) {
                  })
         .def("close", &zstream::close)
         .def("__repr__",
-             [](zstream & zs)
+             [](zstream & /*zs*/)
                  {
                      return "<zstream>";
                  })
