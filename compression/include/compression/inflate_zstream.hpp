@@ -17,6 +17,8 @@ public:
 
 public:
     inflate_zstream();
+    /* move-only */
+    inflate_zstream(inflate_zstream const & x) = delete;
     ~inflate_zstream();
 
     /* uncompress some input.
@@ -26,7 +28,7 @@ public:
      */
     std::pair<span_type, span_type> inflate_chunk();
 
-    void swap (inflate_zstream & x) {
+    void swap(inflate_zstream & x) {
         base_zstream::swap(x);
     }
 
@@ -35,11 +37,15 @@ public:
         base_zstream::operator=(std::move(x));
         return *this;
     }
+
+private:
+    /* calls ::inflateInit2() */
+    void setup();
+    /* calls ::inflateEnd() */
+    void teardown();
 };
 
-namespace std {
-    inline void
-    swap(inflate_zstream & lhs, inflate_zstream & rhs) {
-        lhs.swap(rhs);
-    }
+inline void
+swap(inflate_zstream & x, inflate_zstream & y) noexcept {
+    x.swap(y);
 }

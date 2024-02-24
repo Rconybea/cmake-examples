@@ -8,6 +8,11 @@
  *   buffered_inflate_zstream zs;
  *   ofstream ucfs("path/to/uncompressedfile");
  *
+ *   if (!ucfs)
+ *       error...
+ *   if (!zfs)
+ *       error...
+ *
  *   while (!zfs.eof()) {
  *       span<char> z_span = zs.z_avail();
  *       if (!zfs.read(z_span.lo(), z_span.size())) {
@@ -28,17 +33,25 @@ public:
     using z_span_type = span<std::uint8_t>;
     using size_type = std::uint64_t;
 
+    static constexpr size_type c_default_buf_z = 64UL * 1024UL;
+
 public:
-    buffered_inflate_zstream(size_type buf_z = 64UL * 1024UL,
+    /* buf_z :  buffer size for compressed + uncompressed input.
+     *          If 0,  defer allocation
+     * align_z :  alignment for uncompressed input, if allocating. Otherwise ignored
+     */
+    buffered_inflate_zstream(size_type buf_z = c_default_buf_z,
                              size_type align_z = sizeof(char))
-        : z_in_buf_{buf_z, align_z},
+        : z_in_buf_{buf_z, sizeof(std::uint8_t)},
           uc_out_buf_{buf_z, align_z}
         {
             zs_algo_.provide_output(uc_out_buf_.avail());
         }
+    /* not copyable (since .inflate_zstream isn't) */
+    buffered_inflate_zstream(buffered_inflate_zstream const & x) = delete;
 
-    std::uint64_t n_in_total() const { return zs_algo_.n_in_total(); }
-    std::uint64_t n_out_total() const { return zs_algo_.n_out_total(); }
+    size_type n_in_total() const { return zs_algo_.n_in_total(); }
+    size_type n_out_total() const { return zs_algo_.n_out_total(); }
 
     /* space available for more compressed input */
     z_span_type z_avail() const { return z_in_buf_.avail(); }
@@ -61,7 +74,7 @@ public:
         }
     }
 
-    /* consume some uncompressed input -- allows that buffer space to be reused */
+    /* Consume some uncompressed input -- allows that buffer space to be reused */
     void uc_consume(z_span_type const & span) {
         if (span.size()) {
             uc_out_buf_.consume(span);
@@ -77,10 +90,10 @@ public:
 
     size_type inflate_chunk();
 
-    void swap (buffered_inflate_zstream & x) {
-        std::swap(z_in_buf_, x.z_in_buf_);
-        std::swap(zs_algo_, x.zs_algo_);
-        std::swap(uc_out_buf_, x.uc_out_buf_);
+    void swap(buffered_inflate_zstream & x) {
+        ::swap(z_in_buf_, x.z_in_buf_);
+        ::swap(zs_algo_, x.zs_algo_);
+        ::swap(uc_out_buf_, x.uc_out_buf_);
     }
 
     buffered_inflate_zstream & operator= (buffered_inflate_zstream && x) {
@@ -102,11 +115,9 @@ private:
     buffer<std::uint8_t> uc_out_buf_;
 };
 
-namespace std {
-    inline void
-    swap(buffered_inflate_zstream & lhs,
-         buffered_inflate_zstream & rhs)
-    {
-        lhs.swap(rhs);
-    }
+inline void
+swap(buffered_inflate_zstream & lhs,
+     buffered_inflate_zstream & rhs)
+{
+    lhs.swap(rhs);
 }

@@ -42,7 +42,7 @@ public:
     using off_type = typename Traits::off_type;
     using zstreambuf_type = basic_zstreambuf<CharT, Traits>;
 
-    static constexpr std::streamsize c_default_buffer_size = 64 * 1024;
+    static constexpr std::streamsize c_default_buffer_size = zstreambuf_type::c_default_buf_z;
 
 public:
     basic_zstream(std::streamsize buf_z,

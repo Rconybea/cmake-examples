@@ -6,58 +6,79 @@
 #include <zlib.h>
 #include <ios>
 #include <utility>
+#include <memory>
 #include <cstring>
 
+/* Shared base class for {deflate_zstream, inflate_zstream}
+ */
 class base_zstream {
 public:
     using span_type = span<std::uint8_t>;
 
 public:
-    bool input_empty() const { return (zstream_.avail_in == 0); }
-    bool have_input() const { return (zstream_.avail_in > 0); }
-    bool output_empty() const { return (zstream_.avail_out == 0); }
+    /* not copyable or moveable (beause z_stream isn't) */
+    base_zstream(base_zstream const & x) = delete;
 
-    std::uint64_t n_in_total() const { return zstream_.total_in; }
-    std::uint64_t n_out_total() const { return zstream_.total_out; }
+    /* true iff no input work remaining (as far as zlib control struct concerned) */
+    bool input_empty() const { return (p_native_zs_->avail_in == 0); }
+    /* true iff input work remaining for zlib control struct */
+    bool have_input() const { return (p_native_zs_->avail_in > 0); }
+    /* true iff no output work available from zlib control struct) */
+    bool output_empty() const { return (p_native_zs_->avail_out == 0); }
+
+    std::uint64_t n_in_total() const { return p_native_zs_->total_in; }
+    std::uint64_t n_out_total() const { return p_native_zs_->total_out; }
 
     /* Require: .input_empty() */
     void provide_input(std::uint8_t * buf, std::streamsize buf_z) {
         if (! this->input_empty())
             throw std::runtime_error("base_zstream::provide_input: prior input work not complete");
 
-        zstream_.next_in = buf;
-        zstream_.avail_in = buf_z;
+        p_native_zs_->next_in = buf;
+        p_native_zs_->avail_in = buf_z;
     }
 
+    /* attach input span to zlib control struct */
     void provide_input(span_type const & span) {
         this->provide_input(span.lo(), span.size());
     }
 
+    /* attach output buffer space to zlib stream control state */
     void provide_output(uint8_t * buf, std::streamsize buf_z) {
-        zstream_.next_out = buf;
-        zstream_.avail_out = buf_z;
+        p_native_zs_->next_out = buf;
+        p_native_zs_->avail_out = buf_z;
     }
 
+    /* attach output span to zlib control struct */
     void provide_output(span_type const & span) {
         this->provide_output(span.lo(), span.size());
     }
 
-protected:
+    /* swap two base_zstream objects */
     void swap(base_zstream & x) {
-        std::swap(zstream_, x.zstream_);
+        std::swap(p_native_zs_, x.p_native_zs_);
     }
 
-    /* move-assignment */
+protected:
+    base_zstream() : p_native_zs_(new z_stream) {
+        /* derived class must call ::inflateInit() / ::inflateInit2() / ::deflateInit() / ::deflateInit2() on *p_native_zstream */
+    }
+
     base_zstream & operator= (base_zstream && x) {
-        zstream_ = x.zstream_;
-
-        /* zero rhs to prevent ::inflateEnd() releasing memory in x dtor */
-        ::memset(&x.zstream_, 0, sizeof(x.zstream_));
-
+        p_native_zs_ = std::move(x.p_native_zs_);
         return *this;
     }
 
+    friend void swap(base_zstream & x, base_zstream & y) noexcept;
+
 protected:
-    /* zlib control state.  contains heap-allocated memory */
-    z_stream zstream_;
+    /* zlib control state.  contains heap-allocated memory;
+     * not copyable or movable (determined empirically :)
+     */
+    std::unique_ptr<z_stream> p_native_zs_;
 };
+
+inline void
+swap(base_zstream & x, base_zstream & y) noexcept {
+    x.swap(y);
+}
