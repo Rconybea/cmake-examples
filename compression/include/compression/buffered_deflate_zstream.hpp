@@ -45,10 +45,14 @@ public:
     static constexpr size_type c_default_buf_z = 64UL * 1024UL;
 
 public:
-    buffered_deflate_zstream(size_type buf_z = 64 * 1024,
+    /* buf_z :    buffer size for compressed + uncompressed input.
+     *            If 0,  defer allocation
+     * align_z :  alignment for uncompressed output,  if allocating.  Otherwise ignored.
+     */
+    buffered_deflate_zstream(size_type buf_z = c_default_buf_z,
                              size_type align_z = 1)
         : uc_in_buf_{buf_z, align_z},
-          z_out_buf_{buf_z, align_z}
+          z_out_buf_{buf_z, sizeof(std::uint8_t)}
         {
             zs_algo_.provide_output(z_out_buf_.avail());
         }
@@ -91,7 +95,12 @@ public:
 
     void z_consume_all() { this->z_consume(this->z_contents()); }
 
-    /* return #of bytes compressed output available */
+    /* deflate some portion of uncompressed input buffer.
+     *
+     * final_flag: must be set exactly once on last call for an output,  to flush any partially compressed state.
+     *
+     * return #of bytes compressed output available
+     */
     size_type deflate_chunk(bool final_flag);
 
     void swap (buffered_deflate_zstream & x) {

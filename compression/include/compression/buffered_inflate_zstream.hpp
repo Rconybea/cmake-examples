@@ -8,6 +8,11 @@
  *   buffered_inflate_zstream zs;
  *   ofstream ucfs("path/to/uncompressedfile");
  *
+ *   if (!ucfs)
+ *       error...
+ *   if (!zfs)
+ *       error...
+ *
  *   while (!zfs.eof()) {
  *       span<char> z_span = zs.z_avail();
  *       if (!zfs.read(z_span.lo(), z_span.size())) {
@@ -31,9 +36,13 @@ public:
     static constexpr size_type c_default_buf_z = 64UL * 1024UL;
 
 public:
-    buffered_inflate_zstream(size_type buf_z = 64UL * 1024UL,
+    /* buf_z :  buffer size for compressed + uncompressed input.
+     *          If 0,  defer allocation
+     * align_z :  alignment for uncompressed input, if allocating. Otherwise ignored
+     */
+    buffered_inflate_zstream(size_type buf_z = c_default_buf_z,
                              size_type align_z = sizeof(char))
-        : z_in_buf_{buf_z, align_z},
+        : z_in_buf_{buf_z, sizeof(std::uint8_t)},
           uc_out_buf_{buf_z, align_z}
         {
             zs_algo_.provide_output(uc_out_buf_.avail());
