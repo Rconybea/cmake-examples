@@ -62,7 +62,9 @@ public:
 
     /* space available for more uncompressed output (input of this object) */
     z_span_type uc_avail() const { return uc_in_buf_.avail(); }
-    /* spaec available for more compressed output */
+    /* uncompressed content buffered for compression (see .uc_produce()) */
+    z_span_type uc_contents() const { return uc_in_buf_.contents(); }
+    /* space available for more compressed output */
     z_span_type z_avail() const { return z_out_buf_.avail(); }
     /* compressed content available */
     z_span_type z_contents() const { return z_out_buf_.contents(); }

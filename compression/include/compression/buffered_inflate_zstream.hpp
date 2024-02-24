@@ -50,8 +50,8 @@ public:
     /* not copyable (since .inflate_zstream isn't) */
     buffered_inflate_zstream(buffered_inflate_zstream const & x) = delete;
 
-    std::uint64_t n_in_total() const { return zs_algo_.n_in_total(); }
-    std::uint64_t n_out_total() const { return zs_algo_.n_out_total(); }
+    size_type n_in_total() const { return zs_algo_.n_in_total(); }
+    size_type n_out_total() const { return zs_algo_.n_out_total(); }
 
     /* space available for more compressed input */
     z_span_type z_avail() const { return z_in_buf_.avail(); }
@@ -74,7 +74,7 @@ public:
         }
     }
 
-    /* consume some uncompressed input -- allows that buffer space to be reused */
+    /* Consume some uncompressed input -- allows that buffer space to be reused */
     void uc_consume(z_span_type const & span) {
         if (span.size()) {
             uc_out_buf_.consume(span);
