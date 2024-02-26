@@ -210,6 +210,11 @@ protected:
         if ((openmode_ & std::ios::in) == 0)
             throw std::runtime_error("basic_zstreambuf::underflow: expected ios::in bit set when reading from streambuf");
 
+        if (this->gptr() < this->egptr()) {
+            /* short-circuit unnecessary .underflow(),  so we don't trash state */
+            return Traits::to_int_type(*this->gptr());
+        }
+
         std::streambuf * nsbuf = native_sbuf_.get();
 
         /* read position associated with start of buffer needs to include
@@ -255,7 +260,7 @@ protected:
                 break;
         }
 
-        /* ucspan: uncompressed output */
+        /* ucspan: uncompressed input */
         auto ucspan = in_zs_.uc_contents();
 
         /* streambuf pointers need to know content

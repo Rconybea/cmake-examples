@@ -128,6 +128,7 @@ class Test_zstream(unittest.TestCase):
         s = 'hello, world!\n'
         n = zs.write(s)
 
+        self.assertEqual(n, len(s))
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), n)
         zs.close()
@@ -156,11 +157,13 @@ class Test_zstream(unittest.TestCase):
 
         self.assertEqual(zs.openmode(), openmode.output)
         self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.fail(), False)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
         s = 'hello, world!\n'
         n = zs.write(s)
 
+        self.assertEqual(n, len(s))
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), n)
         zs.close()
@@ -175,24 +178,20 @@ class Test_zstream(unittest.TestCase):
         # zs.open('hello.gz', openmode.input)
         self.assertEqual(zs.openmode(), openmode.input)
         self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.fail(), False)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
 
-        s2 = zs.read(32)
+        # Note: zs.read() would set failbit since <32 chars available
+        s2 = zs.get(32, '\0')
         #s2=zs.readline()
 
+        self.assertEqual(zs.eof(), True)
+        self.assertEqual(zs.fail(), False)
         self.assertEqual(s2, s)
-        self.assertEqual(zs.tellg(), n)
-        self.assertEqual(zs.tellp(), 0)
-
-        s2 = zs.read(32)
-        #s2=zs.readline()
-        self.assertEqual(zs.openmode(), openmode.input)
-        self.assertEqual(zs.eof(), False)
-        self.assertEqual(zs.tellg(), n)
-        self.assertEqual(zs.tellp(), 0)
-
-        self.assertEqual(s2, '')
+        self.assertEqual(zs.gcount(), n)
+        self.assertEqual(zs.tellg(), -1)
+        self.assertEqual(zs.tellp(), -1)
 
         zs.close()
 

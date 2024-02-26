@@ -117,12 +117,23 @@ PYBIND11_MODULE(pyzstream, m) {
         .def("eof",
              [](zstream & zs) { return zs.eof(); },
              py::doc("True if and only if input stream has reached end of file."))
+        .def("fail",
+             [](zstream & zs) { return zs.fail(); },
+             py::doc("True if and only if error has occurred (failbit | badbit) on associated stream."))
+        .def("gcount",
+             [](zstream & zs) -> int64_t { return zs.gcount(); },
+             py::doc("return #of chars obtained on last input i/o operation"))
         .def("tellg",
              [](zstream & zs) -> int64_t { return zs.tellg(); },
-             py::doc("return current get position (position relative to 0=start for input sequence"))
+             py::doc("Return current get position (position relative to 0=start for input sequence.\n"
+                     "Warning! Non-monotonic: reports -1 once input reaches eof.  Consider using .gcount()\n"))
         .def("tellp",
              [](zstream & zs) -> int64_t { return zs.tellp(); },
-             py::doc("return current put position (position relative to 0=start for output sequence"))
+             py::doc("Return current put position (position relative to 0=start for output sequence.\n"
+                     "Warning! Non-monotonic: reports -1 once input reaches eof.\n"))
+        .def("peek",
+             [](zstream & zs) -> char { return zs.peek();  },
+             py::doc("Return next input character,  without extracting it"))
         .def("read",
              [](zstream & zs, std::streamsize z)
                  {
@@ -138,15 +149,40 @@ PYBIND11_MODULE(pyzstream, m) {
                      retval.resize(n_read);
 
                      return retval;
-                 })
+                 },
+             py::doc("Read z characters from stream.\n"
+                     "Return string containing the characters read.\n"
+                     "Set both fail and eof bits if less than z characters are available.\n"))
+        .def("get",
+             [](zstream & zs, std::streamsize z, char delim)
+                 {
+                     std::string retval;
+                     retval.resize(z);
+
+                     /* read into buffer */
+                     zs.get(retval.data(), z, delim);
+
+                     std::streamsize n_read = zs.gcount();
+
+                     retval.resize(n_read);
+
+                     return retval;
+                 },
+             py::doc("Read up to z characters from stream,\n"
+                     " but stop on first occurence of delim.\n"
+                     "Sets eof bit (but not fail bit) if less than z characters are available.\n"))
         .def("write",
              [](zstream & zs, std::string const & x)
                  {
+                     zstream::pos_type p0 = zs.tellp();
+
                      zs.write(x.data(), x.size());
+
+                     zstream::pos_type p1 = zs.tellp();
 
                      /* cannot return this,  because don't know address of unique python wrapper object */
 
-                     return zs.gcount();
+                     return (p1 - p0);
                  })
         .def("close", &zstream::close)
         .def("__repr__",
