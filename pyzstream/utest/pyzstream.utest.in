@@ -10,4 +10,45 @@ pyzstream_libdir=${projbindir}/pyzstream
 
 export PYTHONPATH=${pyzstream_libdir}:${PYTHONPATH}
 
-python ${srcdir}/pyzstream.utest.py $@
+usage() {
+    echo "usage: $0 [-i | --interactive] [-h | --help | --usage] ARGS" 1>&2
+}
+
+help_flag=0
+interactive_flag=0
+
+while [[ $# > 0 ]]; do
+    case "$1" in
+        -i | --interactive)
+            interactive_flag=1
+            ;;
+        -h | --help | --usage)
+            help_flag=1
+            ;;
+        --)
+            # forward remaining args to python session
+            shift
+            break
+            ;;
+        *)
+            usage
+            exit 1
+            ;;
+    esac
+
+    shift
+done
+
+if [[ $help_flag -eq 1 ]]; then
+    # help message only
+    usage
+elif [[ $interactive_flag -eq 1 ]]; then
+    # interactive python session,  with PYTHONPATH referring to:
+    # 1. c++ libraries in build tree
+    # 2. python libraries in source tree
+    #
+    python $@
+else
+    # run (python) unittest
+    python ${srcdir}/pyzstream.utest.py $@
+fi
