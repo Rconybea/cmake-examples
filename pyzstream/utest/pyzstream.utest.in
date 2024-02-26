@@ -11,7 +11,7 @@ pyzstream_libdir=${projbindir}/pyzstream
 export PYTHONPATH=${pyzstream_libdir}:${PYTHONPATH}
 
 usage() {
-    echo "usage: $0 [-i | --interactive] [-h | --help | --usage] ARGS" 1>&2
+    echo "usage: $0 [-i | --interactive] [--shell] [-h | --help | --usage] ARGS" 1>&2
 }
 
 help_flag=0
@@ -24,6 +24,9 @@ while [[ $# > 0 ]]; do
             ;;
         -h | --help | --usage)
             help_flag=1
+            ;;
+        --shell)
+            shell_flag=1
             ;;
         --)
             # forward remaining args to python session
@@ -48,6 +51,9 @@ elif [[ $interactive_flag -eq 1 ]]; then
     # 2. python libraries in source tree
     #
     python $@
+elif [[ $shell_flag -eq 1 ]]; then
+    # run bash.  environment has modified PYTHONPATH
+    exec bash
 else
     # run (python) unittest
     python ${srcdir}/pyzstream.utest.py $@
