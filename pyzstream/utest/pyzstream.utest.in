@@ -2,13 +2,15 @@
 #
 # pyzstream test runner
 
+projsrcdir=@PROJECT_SOURCE_DIR@
 projbindir=@PROJECT_BINARY_DIR@
 srcdir=@CMAKE_CURRENT_SOURCE_DIR@
 
 # build directory that contains pyzstream .so
 pyzstream_libdir=${projbindir}/pyzstream
+pyzstream_srcdir=${projsrcdir}/pyzstream
 
-export PYTHONPATH=${pyzstream_libdir}:${PYTHONPATH}
+export PYTHONPATH=${pyzstream_libdir}:${pyzstream_srcdir}:${PYTHONPATH}
 
 usage() {
     echo "usage: $0 [-i | --interactive] [--shell] [-h | --help | --usage] ARGS" 1>&2
@@ -55,6 +57,8 @@ elif [[ $shell_flag -eq 1 ]]; then
     # run bash.  environment has modified PYTHONPATH
     exec bash
 else
-    # run (python) unittest
-    python ${srcdir}/pyzstream.utest.py $@
+    # python module is cmake-examples/pyzstream/utest,
+    # which import pyzstream_utest
+    #
+    python -m unittest utest $@
 fi
