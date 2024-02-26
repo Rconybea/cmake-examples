@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # python script to exercise zstream
 
 import pyzstream
