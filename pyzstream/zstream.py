@@ -11,16 +11,23 @@ class ZstreamBase(io.IOBase):
     # pyzstream.zstream (see pyzstream.cpp)
     _zstream = None
 
-    def __init__(self, filename, mode = 'r', bufsize = 64*1024):
-        zstream_mode = pyzstream.openmode.input
+    def __init__(self, filename, mode = pyzstream.openmode.input, bufsize = 64*1024):
+        """
+        Broken! python I/O expects to use string like 'rb' to specify openmode
+        """
+
         #zstream_mode = pyzstream.openmode.from_string(mode)
 
-        self._zstream = pyzstream.zstream(bufsize, filename, zstream_mode)
+        self._zstream = pyzstream.zstream(bufsize, filename, mode)
+        #self._zstream = pyzstream.zstream(bufsize, filename, zstream_mode)
+
         super(ZstreamBase, self).__init__()
 
     def read(self, z = -1):
         """
-        Broken!  zstream.read(z) will set failbit if less than z bytes available
+        Broken!
+        1. zstream.read(z) will set failbit if less than z bytes available
+        2. zstream.read() expects positive argument
         """
         return self._zstream.read(z)
 
@@ -85,10 +92,10 @@ class BufferedZstream(ZstreamBase, io.BufferedIOBase):
     ZstreamBase provides methods read(), write()
     """
 
-    def __init__(self, filename, mode = 'r', bufsize = 64*1024):
+    def __init__(self, filename, mode = pyzstream.openmode.input, bufsize = 64*1024):
         # super() invokes ZstreamBase ctor first
         super(BufferedZstream, self).__init__(filename,
-                                              pystream.openmode.input | pyzstream.openmode.binary,
+                                              mode | pyzstream.openmode.binary,
                                               bufsize)
 
     # def read1(z = -1):   # TODO
@@ -104,7 +111,7 @@ class TextZstream(ZstreamBase, io.TextIOBase):
     Zstreams do not support seek or truncate.
     """
 
-    def __init__(self, filename, mode = 'r', bufsize = 64*1024):
+    def __init__(self, filename, mode = pyzstream.openmode.input, bufsize = 64*1024):
         # init ZstreamBase first
         super(TextZstream, self).__init__(filename, mode, bufsize)
 
