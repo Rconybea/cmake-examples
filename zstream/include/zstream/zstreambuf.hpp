@@ -182,12 +182,46 @@ public:
 #  endif
 
 protected:
-    /* estimates #of characters n available for input -- .underflow() will not be called
+#ifdef NOT_USING
+    /* "Estimates" #of characters n available for input
+     * Promises .underflow() will not be called
      * or throw exception until at least n chars are extracted.
      *
-     * -1 if .showmanyc() can prove input has reached eof
+     * 1.
+     *   basic_istream.readsome()
+     *    --calls-> streambuf.in_avail()
+     *    --calls-> streambuf.showmanyc()  when get area is empty;
+     *
+     *   Therefore must implement .showmanyc() to support istream.readsome()
+     *
+     * 2.
+     *   cppreference implies .showmanyc() is supposed to reach decision without blocking.
+     *   Satisfying this requirement would mean we cannot actually use .readsome() as
+     *   "alternative to .read() that does not set failbit on eof".
+     *
+     * We could choose to resolve this by having .showmanyc() attempt read when input area
+     * is empty;  but won't do what we want -- we want variation on .read(z)
+     * that always reads z chars when z chars exist on input before eof
      */
-    //virtual std::streamsize showmanyc() override;
+    virtual std::streamsize showmanyc() override {
+        std::streamsize n = (this->egptr() - this->gptr());
+
+        if (n == 0) {
+            this->underflow(); /* always calls .setg_span() */
+        }
+
+        n = (this->egptr() - this->gptr());
+
+        if (n == 0) {
+            /* assuming input stream is blocking here.
+             * if got 0 bytes + EWOULDBLOCK,  should return 0 instead
+             */
+            return -1;
+        }
+
+        return n;
+    }
+#endif
 
     /* attempt to read n chars from input,  and store in s.
      * (will call .uflow() as needed if less than n chars are immediately available)
