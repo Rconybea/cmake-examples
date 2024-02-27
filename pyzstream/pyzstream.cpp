@@ -114,6 +114,27 @@ PYBIND11_MODULE(pyzstream, m) {
              &zstream::openmode,
              py::doc("Mode bitmask.\n"
                      "Combination of input|output|binary."))
+        .def("is_readable",
+             [](zstream & zs)
+                 {
+                     return ((zs.openmode() & ios::in) == ios::in);
+                 },
+             py::doc("True if and only if stream is enabled for input."
+                     " (openmode.input bit is set)"))
+        .def("is_writable",
+             [](zstream & zs)
+                 {
+                     return ((zs.openmode() & ios::out) == ios::out);
+                 },
+             py::doc("True if and only if stream is enabled for output."
+                     " (openmode.output bit is set)"))
+        .def("is_open",
+             &zstream::is_open,
+             py::doc("True if and only if stream is in an open state,\n"
+                     "i.e. connected to a stream and available for IO according to openmode.\n"))
+        .def("is_closed",
+             &zstream::is_closed,
+             py::doc("True if and only if stream is in a closed state."))
         .def("eof",
              [](zstream & zs) { return zs.eof(); },
              py::doc("True if and only if input stream has reached end of file."))
@@ -185,6 +206,9 @@ PYBIND11_MODULE(pyzstream, m) {
                      return (p1 - p0);
                  })
         .def("close", &zstream::close)
+        .def("sync",
+             &zstream::sync,
+             py::doc("Sync stream state with filesystem (i.e. flush output)."))
         .def("__repr__",
              [](zstream & /*zs*/)
                  {

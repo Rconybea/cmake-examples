@@ -111,6 +111,9 @@ public:
     }
 
     std::ios::openmode openmode() const { return openmode_; }
+    bool is_open() const { return !closed_flag_; }
+    bool is_closed() const { return closed_flag_; }
+    bool is_binary() const { return (this->openmode_ & std::ios::binary); }
     std::uint64_t n_z_in_total() const { return in_zs_.n_in_total(); }
     /* note: z input side of zstreambuf = output from inflating-zstream */
     std::uint64_t n_uc_in_total() const { return in_zs_.n_out_total(); }

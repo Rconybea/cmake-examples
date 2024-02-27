@@ -44,11 +44,18 @@ class ZstreamBase(io.IOBase):
 
     # ----- inherited from IOBase -----
 
-    # def readable(self):   # TODO
-    # def writable(self):   # TODO
-    # def seekable(self):   # TODO
+    def readable(self):
+        return self._zstream.is_readable()
 
-    # @property def closed(self):  # TODO
+    def writable(self):
+        return self._zstream.is_writable()
+
+    def seekable(self):
+        return False
+
+    @property
+    def closed(self):
+        return self._zstream.is_closed()
 
     # def fileno(self):    # TODO
 
@@ -85,7 +92,8 @@ class ZstreamBase(io.IOBase):
     def close(self):
         self._zstream.close()
 
-    # def flush(self):  # TODO
+    def flush(self):
+        self._zstream.sync()
 
 
 class BufferedZstream(ZstreamBase, io.BufferedIOBase):
