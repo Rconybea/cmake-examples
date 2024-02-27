@@ -13,9 +13,28 @@ pyzstream_srcdir=${projsrcdir}/pyzstream
 export PYTHONPATH=${pyzstream_libdir}:${pyzstream_srcdir}:${PYTHONPATH}
 
 usage() {
-    echo "usage: $0 [-i | --interactive] [--shell] [-h | --help | --usage] ARGS" 1>&2
+    echo "$0 [-i | --interactive] [--path] [--shell] [-h | --help | --usage] ARGS" 1>&2
 }
 
+help() {
+    usage
+
+    cat <<EOF
+
+with no arguments,  run python unit tests
+  
+Options:
+  -u | --usage         brief help message
+  --help               this help message
+  -i | --interactive   exec python (interactively) with unittest PYTHONPATH
+  --path               print PYTHONPATH to console
+  --shell              exec bash (interactively) with unittest PYTHONPATH set
+
+EOF
+}
+
+usage_flag=0
+>>>>>>> Stashed changes
 help_flag=0
 interactive_flag=0
 
@@ -62,3 +81,4 @@ else
     #
     python -m unittest utest $@
 fi
+
