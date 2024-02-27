@@ -3,15 +3,12 @@
 
 from .openmode_utest import *
 from .zstream_utest import *
+from .ZstreamBase_utest import *
+from .TextZstream_utest import *
+from .BufferedZstream_utest import *
+
 import unittest
 import logging
-
-def main():
-
-# Test pybind11-mediated zstream
-#
-class Test_zstream(unittest.TestCase):
-
 
 def main():
     """
@@ -21,7 +18,6 @@ def main():
     """
 
     #logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
->>>>>>> ex18:pyzstream/utest/pyzstream.utest.py
     #logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
     #Test_zstream.log=logging.getLogger("Test_zstream")
@@ -29,9 +25,6 @@ def main():
 
     #Test_ZstreamBase.log = logging.getLogger("Test_ZstreamBase")
     #Test_ZstreamBase.log.debug("logging enabled")
-
-    Test_ZstreamBase.log = logging.getLogger("Test_ZstreamBase")
-    Test_ZstreamBase.log.debug("logging enabled")
 
     #print("pyzstream.utest.py\n")
     #print("cwd=", os.getcwd(), "\n")
