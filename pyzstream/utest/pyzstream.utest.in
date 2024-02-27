@@ -14,7 +14,7 @@ pyzstream_srcdir=${projsrcdir}/pyzstream
 export PYTHONPATH=${pyzstream_libdir}:${pyzstream_srcdir}:${PYTHONPATH}
 
 usage() {
-    echo "$0 [-i | --interactive] [--path] [--shell] [-h | --help | --usage] ARGS" 1>&2
+    echo "$0 [-i | --interactive] [--path] [--shell] [--coverage] [-h | --help | --usage] -- ARGS" 1>&2
 }
 
 help() {
@@ -30,6 +30,7 @@ Options:
   -i | --interactive   exec python (interactively) with unittest PYTHONPATH
   --path               print PYTHONPATH to console
   --shell              exec bash (interactively) with unittest PYTHONPATH set
+  --coverage           run unittest with coverage + report
 
 EOF
 }
@@ -39,6 +40,7 @@ help_flag=0
 path_flag=0
 shell_flag=0
 interactive_flag=0
+coverage_flag=0
 
 while [[ $# > 0 ]]; do
     case "$1" in
@@ -56,6 +58,9 @@ while [[ $# > 0 ]]; do
             ;;
         --shell)
             shell_flag=1
+            ;;
+        --coverage)
+            coverage_flag=1
             ;;
         --)
             # forward remaining args to python session
@@ -90,6 +95,16 @@ elif [[ $path_flag -eq 1 ]]; then
 elif [[ $shell_flag -eq 1 ]]; then
     # run bash.  environment has modified PYTHONPATH
     exec bash
+elif [[ $coverage_flag -eq 1 ]]; then
+    coverage run -m unittest utest
+    coverage html
+
+    echo
+
+    coverage report -m
+    
+    echo
+    echo "point browser to [file:///${bindir}/htmlcov/index.html] for html version"
 else
     # python module is cmake-examples/pyzstream/utest,
     # which imports pyzstream_utest
