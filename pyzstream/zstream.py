@@ -1,7 +1,8 @@
+# zstream.py
 
-
-import io
 import pyzstream
+import io
+import os
 
 class ZstreamBase(io.IOBase):
     """
@@ -11,14 +12,19 @@ class ZstreamBase(io.IOBase):
     # pyzstream.zstream (see pyzstream.cpp)
     _zstream = None
 
-    def __init__(self, filename, mode = pyzstream.openmode.input, bufsize = 64*1024):
+    def __init__(self,
+                 filename : str | bytes | os.PathLike,
+                 mode = pyzstream.openmode.input,
+                 bufsize = 64*1024):
         """
         Broken! python I/O expects to use string like 'rb' to specify openmode
         """
 
         #zstream_mode = pyzstream.openmode.from_string(mode)
 
-        self._zstream = pyzstream.zstream(bufsize, filename, mode)
+        self._zstream = pyzstream.zstream(bufsize,
+                                          os.fspath(filename),
+                                          mode)
         #self._zstream = pyzstream.zstream(bufsize, filename, zstream_mode)
 
         super(ZstreamBase, self).__init__()
@@ -92,7 +98,10 @@ class BufferedZstream(ZstreamBase, io.BufferedIOBase):
     ZstreamBase provides methods read(), write()
     """
 
-    def __init__(self, filename, mode = pyzstream.openmode.input, bufsize = 64*1024):
+    def __init__(self,
+                 filename : str | bytes | os.PathLike,
+                 mode = pyzstream.openmode.input,
+                 bufsize = 64*1024):
         # super() invokes ZstreamBase ctor first
         super(BufferedZstream, self).__init__(filename,
                                               mode | pyzstream.openmode.binary,
@@ -111,7 +120,10 @@ class TextZstream(ZstreamBase, io.TextIOBase):
     Zstreams do not support seek or truncate.
     """
 
-    def __init__(self, filename, mode = pyzstream.openmode.input, bufsize = 64*1024):
+    def __init__(self,
+                 filename : str | bytes | os.PathLike,
+                 mode = pyzstream.openmode.input,
+                 bufsize = 64*1024):
         # init ZstreamBase first
         super(TextZstream, self).__init__(filename, mode, bufsize)
 
