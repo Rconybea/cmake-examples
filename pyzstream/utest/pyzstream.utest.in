@@ -5,6 +5,7 @@
 projsrcdir=@PROJECT_SOURCE_DIR@
 projbindir=@PROJECT_BINARY_DIR@
 srcdir=@CMAKE_CURRENT_SOURCE_DIR@
+bindir=@CMAKE_CURRENT_BINARY_DIR@
 
 # build directory that contains pyzstream .so
 pyzstream_libdir=${projbindir}/pyzstream
@@ -34,8 +35,9 @@ EOF
 }
 
 usage_flag=0
->>>>>>> Stashed changes
 help_flag=0
+path_flag=0
+shell_flag=0
 interactive_flag=0
 
 while [[ $# > 0 ]]; do
@@ -43,8 +45,14 @@ while [[ $# > 0 ]]; do
         -i | --interactive)
             interactive_flag=1
             ;;
-        -h | --help | --usage)
+        --usage)
+            usage_flag=1
+            ;;
+        -h | --help)
             help_flag=1
+            ;;
+        --path)
+            path_flag=1
             ;;
         --shell)
             shell_flag=1
@@ -63,21 +71,28 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-if [[ $help_flag -eq 1 ]]; then
-    # help message only
+if [[ $usage_flag -eq 1 ]]; then
+    # usage message only
+    echo -n "usage: "
     usage
+elif [[ $help_flag -eq 1 ]]; then
+    # help message only
+    echo -n "help: "
+    help
 elif [[ $interactive_flag -eq 1 ]]; then
     # interactive python session,  with PYTHONPATH referring to:
     # 1. c++ libraries in build tree
     # 2. python libraries in source tree
     #
-    python $@
+    exec python $@
+elif [[ $path_flag -eq 1 ]]; then
+    echo "PYTHONPATH=${PYTHONPATH}"
 elif [[ $shell_flag -eq 1 ]]; then
     # run bash.  environment has modified PYTHONPATH
     exec bash
 else
     # python module is cmake-examples/pyzstream/utest,
-    # which import pyzstream_utest
+    # which imports pyzstream_utest
     #
     python -m unittest utest $@
 fi
