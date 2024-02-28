@@ -126,12 +126,22 @@ public:
 
     void adopt_native_sbuf(std::unique_ptr<std::streambuf> x) { native_sbuf_ = std::move(x); }
 
+    /* Given that there will be no more uncompressed output,
+     * commit remaining compressed portion to output stream.
+     *
+     * Exposed only so that application code can observe final byte counters .n_uc_out_total(), .n_z_out_total()
+     * before .close() resets them
+     */
+    void final_sync() {
+        if (!final_sync_flag_)
+            this->sync_impl(true /*final_flag*/);
+    }
+
     /* we have a problem writing compressed output:  compression algorithm in general
      * doesn't know how to compress byte n until it has seem byte n+1, .., n+k
      */
     void close() {
-        if (!closed_flag_) {
-            this->sync_impl(true /*final_flag*/);
+        this->final_sync();
 
             this->closed_flag_ = true;
 
@@ -151,6 +161,7 @@ public:
         /* assign any base-class state */
         std::basic_streambuf<CharT, Traits>::operator=(x);
 
+        final_sync_flag_ = x.final_sync_flag_;
         closed_flag_ = x.closed_flag_;
 
         in_uc_pos_ = x.in_uc_pos_;
@@ -168,6 +179,7 @@ public:
         /* swap any base-class state */
         std::basic_streambuf<CharT, Traits>::swap(x);
 
+        std::swap(final_sync_flag_, x.final_sync_flag_);
         std::swap(closed_flag_, x.closed_flag_);
 
         std::swap(in_uc_pos_, x.in_uc_pos_);
@@ -341,6 +353,9 @@ protected:
         }
 #      endif
 
+        if (final_sync_flag_)
+            throw std::runtime_error("basic_zstreambuf::xsputn: attempted write after final sync");
+
         if (closed_flag_)
             throw std::runtime_error("basic_zstreambuf::xsputn: attempted write to closed stream");
 
@@ -455,10 +470,18 @@ private:
         std::cerr << "zstreambuf::sync_impl: enter: :final_flag " << final_flag << std::endl;
 #      endif
 
+        if (final_sync_flag_) {
+            /* implied duplicate call to .sync_impl(true) */
+            return -1;
+        }
+
         if (closed_flag_) {
             /* implies attempt to write more output after call to .close() promised not to */
             return -1;
         }
+
+        if (final_flag)
+            this->final_sync_flag_ = true;
 
         if ((openmode_ & std::ios::out) == 0) {
             /* nothing to do if not using stream for output */
@@ -568,7 +591,9 @@ private:
      */
     std::ios::openmode openmode_;
 
-    /* set irrevocably on .close() */
+    /* set on .sync_impl(true) */
+    bool final_sync_flag_ = false;
+    /* set on .close();  assume zstreambuf is open unless this is set */
     bool closed_flag_ = false;
 
     /* input position,  relative to beginning of stream,  EXCEPT

@@ -96,6 +96,11 @@ public:
     }
 
     /* finishes writing compressed output */
+    void final_sync() {
+        this->rdbuf_.final_sync();
+    }
+
+    /* closes stream;  incorporates .final_sync() */
     void close() {
         this->rdbuf_.close();
     }
