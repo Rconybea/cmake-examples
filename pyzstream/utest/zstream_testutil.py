@@ -53,11 +53,9 @@ def test_empty_deflate_aux(self : unittest.TestCase,
       fname (str).                Filename to use for (empty) compressed stream
     """
 
-    from pyzstream import openmode
-
     self.log.debug("{id}: enter".format(id=unittest.TestCase.id(self)))
 
-    zs = ioclass(fname, openmode.output)
+    zs = ioclass(fname, 'w')
 
     # .isatty not actually known (needs isatty(fd))
     self.assertEqual(zs.isatty(), False)
@@ -83,7 +81,7 @@ def test_empty_deflate_aux(self : unittest.TestCase,
         # gunzip successfully produced empty output
         self.assertEqual(s, b'')
         self.assertEqual(subp.returncode, 0)
-    
+
 def test_single_deflate_aux(self : unittest.TestCase,
                             ioclass : io.IOBase,
                             text : bytes,
@@ -102,11 +100,10 @@ def test_single_deflate_aux(self : unittest.TestCase,
       text (str).                 plain text to write to file.
       fname (str).                Filename to use for (empty) compressed stream
     """
-    from pyzstream import openmode
 
     self.log.debug("test_small_deflate: enter")
 
-    zs = ioclass(fname, openmode.output)
+    zs = ioclass(fname, 'w')
 
     # needs file descriptor to implement
     self.assertEqual(zs.isatty(), False)
@@ -160,19 +157,18 @@ def test_multiline_deflate_aux(self,
       fname (str).                Filename to use for (empty) compressed stream
     """
 
-    from pyzstream import openmode
     from zstream import ZstreamBase
 
     self.log.debug("test_multiline_deflate_aux: enter")
 
-    zs = ioclass(fname, openmode.output)
+    zs = ioclass(fname, 'w')
 
     zs.writelines(text_l)
 
     # count sum of bytes in text
     text = b''.join(text_l)
     n = len(text)
-    
+
     self.assertEqual(zs.tell(), n) # total #of uncompressed chars output
 
     zs.close()
@@ -209,12 +205,11 @@ def test_read_aux(self,
                                   Test fails is len(text) > 16384.
       fname (str).                Filename to use for (empty) compressed stream
     """
-    from pyzstream import openmode
     from zstream import ZstreamBase
 
     self.log.debug("test_read_aux: enter")
 
-    zs = ZstreamBase(fname, openmode.output)
+    zs = ZstreamBase(fname, 'w')
 
     n = len(text)
 
@@ -226,10 +221,9 @@ def test_read_aux(self,
 
     # now read from lorem2.gz
 
-    zs = ioclass(fname, openmode.input)
+    zs = ioclass(fname, 'r')
 
     # zs.read(-1) not supported yet
     s2 = zs.read(16384)
 
     self.assertEqual(s2, text)
-
