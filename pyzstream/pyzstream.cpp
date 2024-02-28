@@ -40,12 +40,17 @@ PYBIND11_MODULE(pyzstream, m) {
                              *   app (append), trunc (truncate), ate (at end), noreplace (exclusive)
                              */
 
-                            if (ch == 'r')
+                            if (ch == 'r') {
                                 retval |=  std::ios::in;
-                            else if (ch == 'w')
+                            } else if (ch == 'w') {
                                 retval |= std::ios::out;
-                            else if (ch == 'b')
+                            } else if (ch == '+') {
+                                retval |= (std::ios::in | std::ios::out);
+                            } else if (ch == 'b') {
                                 retval |= std::ios::binary;
+                            } else if (ch == 't') {
+                                ; /* nothing to do,  text assumed */
+                            }
                         }
 
                         return retval;
