@@ -150,30 +150,18 @@ public:
             this->final_sync_flag_ = false;
             this->closed_flag_ = false;
 
-            using filebuf_type = std::basic_filebuf<CharT, Traits>;
-
-            std::unique_ptr<filebuf_type> p(new filebuf_type());
-
-            if (p->open(filename, std::ios::binary | mode)) {
-                this->adopt_native_sbuf(std::move(p));
-            }
-#ifdef NOT_YET
+            /* reminder: streambuf for compressed data always uses char + ignore CharT */
             std::unique_ptr<xfilebuf> p(new xfilebuf());
             if (p->open(filename, std::ios::binary | mode)) {
                 this->adopt_native_sbuf(std::move(p), p->native_handle());
             }
-#endif
-
         }
 
     /* x can refer to any streambuf implementation: stringbuf, filebuf, ..
      * fd for informational purposes
      */
-    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x
-#ifdef NOT_YET
-                           native_handle_type fd = -1
-#endif
-        )
+    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x,
+                           native_handle_type fd = -1)
         {
             native_sbuf_ = std::move(x);
 
@@ -182,10 +170,8 @@ public:
                 closed_flag_ = false;
             }
 
-#ifdef NOT_YET
             /* stash file descriptor,  if available */
             native_fd_ = fd;
-#endif
         }
 
 
@@ -195,10 +181,11 @@ public:
      * Exposed only so that application code can observe final byte counters .n_uc_out_total(), .n_z_out_total()
      * before .close() resets them
      */
-    void final_sync() {
-        if (!final_sync_flag_)
-            this->sync_impl(true /*final_flag*/);
-    }
+    void final_sync()
+        {
+            if (!final_sync_flag_)
+                this->sync_impl(true /*final_flag*/);
+        }
 
     /* we have a problem writing compressed output:  compression algorithm in general
      * doesn't know how to compress byte n until it has seem byte n+1, .., n+k
