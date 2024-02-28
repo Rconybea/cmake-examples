@@ -130,6 +130,8 @@ public:
           native_sbuf_{std::move(native_sbuf)},
           native_fd_{fd}
     {
+        this->closed_flag_ = (native_sbuf_ ? false : true);
+
         this->setg_span(in_zs_.uc_contents());
         this->setp_span(out_zs_.uc_avail());
     }
