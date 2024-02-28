@@ -143,6 +143,7 @@ public:
     void close() {
         this->final_sync();
 
+        if (!this->closed_flag_) {
             this->closed_flag_ = true;
 
             this->in_uc_pos_ = 0;
