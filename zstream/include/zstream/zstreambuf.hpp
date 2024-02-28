@@ -87,13 +87,16 @@ public:
     /* Taking care with alignment: if CharT is a wide character type,  probably want/need aligned buffers
      * for uncompressed data.
      *
-     * buf_z : buffer size for inflation/deflation algorithm.  Buffer memory consumption is 4x this value.
-     *         Allocating memory separately for input (.in_zs), output (.out_zs):
-     *         - .in_zs.z_in_buf buffer compressed input
-     *         - .in_zs.uc_out_buf buffer uncompressed input
-     *         - .out_zs.uc_in_buf buffer uncompressed output
-     *         - .out_zs.z_out_buf buffer compressed output
-     *         Can use 0 to defer buffer allocation
+     * buf_z       buffer size for inflation/deflation algorithm.  Buffer memory consumption is 4x this value.
+     *             Allocating memory separately for input (.in_zs), output (.out_zs):
+     *             - .in_zs.z_in_buf buffer compressed input
+     *             - .in_zs.uc_out_buf buffer uncompressed input
+     *             - .out_zs.uc_in_buf buffer uncompressed output
+     *             - .out_zs.z_out_buf buffer compressed output
+     *             Can use 0 to defer buffer allocation
+     * native_sbuf streambuf for doing compressed i/o.
+     *             if this is a filebuf,  it must be in an open state
+     * mode        open mode bitmask.
      */
     basic_zstreambuf(size_type buf_z = 64 * 1024,
                      std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>(),
@@ -103,6 +106,8 @@ public:
           out_zs_{aligned_upper_bound(buf_z), alignment()},
           native_sbuf_{std::move(native_sbuf)}
     {
+        closed_flag_ = (native_sbuf_ ? false : true);
+
         this->setg_span(in_zs_.uc_contents());
         this->setp_span(out_zs_.uc_avail());
     }
@@ -124,7 +129,13 @@ public:
 
     std::streambuf * native_sbuf() const { return native_sbuf_.get(); }
 
-    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x) { native_sbuf_ = std::move(x); }
+    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x) {
+        native_sbuf_ = std::move(x);
+
+        /* reminder: only way to close .native_sbuf is to invoke its dtor */
+
+        closed_flag_ = (native_sbuf_ ? false : true);
+    }
 
     /* we have a problem writing compressed output:  compression algorithm in general
      * doesn't know how to compress byte n until it has seem byte n+1, .., n+k
