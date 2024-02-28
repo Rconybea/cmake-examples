@@ -40,6 +40,7 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.native_handle(), -1)
 
         return
 
