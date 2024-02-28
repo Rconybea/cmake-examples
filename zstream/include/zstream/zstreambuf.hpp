@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "xfilebuf.hpp"
 #include "compression/buffered_inflate_zstream.hpp"
 #include "compression/buffered_deflate_zstream.hpp"
 #include "compression/tostr.hpp"
@@ -94,14 +95,17 @@ public:
      *         - .out_zs.uc_in_buf buffer uncompressed output
      *         - .out_zs.z_out_buf buffer compressed output
      *         Can use 0 to defer buffer allocation
+     * native_sbuf :  stream buffer for compressed data;  if this is a filebuf,  it should be open already
      */
     basic_zstreambuf(size_type buf_z = 64 * 1024,
+                     native_handle_type fd = -1,
                      std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>(),
                      std::ios::openmode mode = std::ios::in)
         : openmode_{mode},
           in_zs_{aligned_upper_bound(buf_z), alignment()},
           out_zs_{aligned_upper_bound(buf_z), alignment()},
-          native_sbuf_{std::move(native_sbuf)}
+          native_sbuf_{std::move(native_sbuf)},
+          native_fd_{fd}
     {
         this->setg_span(in_zs_.uc_contents());
         this->setp_span(out_zs_.uc_avail());
@@ -114,6 +118,8 @@ public:
     bool is_open() const { return !closed_flag_; }
     bool is_closed() const { return closed_flag_; }
     bool is_binary() const { return (this->openmode_ & std::ios::binary); }
+    native_handle_type native_handle() const { return native_fd_; }
+
     std::uint64_t n_z_in_total() const { return in_zs_.n_in_total(); }
     /* note: z input side of zstreambuf = output from inflating-zstream */
     std::uint64_t n_uc_in_total() const { return in_zs_.n_out_total(); }
@@ -216,6 +222,7 @@ public:
              * is to invoke destructor,  so that's what we do here
              */
             this->native_sbuf_.reset();
+            this->native_fd_ = -1;
 
             /* also for consistency,  clear builtin streambuf pointers:
              * 1. no input (.setg_span())
@@ -241,6 +248,7 @@ public:
         out_zs_ = std::move(x.out_zs_);
 
         native_sbuf_ = std::move(x.native_sbuf_);
+        native_fd_ = x.native_fd_;
 
         return *this;
     }
@@ -259,6 +267,7 @@ public:
         ::swap(out_zs_, x.out_zs_);
 
         std::swap(native_sbuf_, x.native_sbuf_);
+        std::swap(native_fd_, x.native_fd_);
     }
 
 #  ifndef NDEBUG
@@ -573,11 +582,20 @@ private:
                                               reinterpret_cast<std::uint8_t *>(this->pptr())));
 
         for (bool progress = true; progress;) {
-            out_zs_.deflate_chunk(final_flag);
+            this->out_zs_.deflate_chunk(final_flag);
+
             auto zspan = out_zs_.z_contents();
 
+            /* send compressed output to native sbuf */
             std::streamsize n_written = nsbuf->sputn(reinterpret_cast<char *>(zspan.lo()),
                                                      zspan.size());
+
+#          ifndef NDEBUG
+            if (debug_flag_) {
+                std::cerr << "zstreambuf::sync_impl: (compressed) zspan.lo=" << static_cast<void *>(zspan.lo())
+                          << ", zspan.size=" << zspan.size() << ", n_written=" << n_written << std::endl;
+            }
+#          endif
 
             if (n_written < static_cast<std::streamsize>(zspan.size())) {
                 throw std::runtime_error(tostr("zstreambuf::sync_impl: partial write",
@@ -625,7 +643,7 @@ private:
         return sizeof(CharT);
     }
 
-    /* returns #of bytes equal to a multiple of {CharT alignment,  sizeof(CharT)},
+    /* returns #of bytes equal to a multiple of sizeof(CharT),
      * whichever is larger.  Use this to round up buffer sizes
      */
     static size_type aligned_upper_bound(size_type z) {
@@ -692,6 +710,11 @@ private:
 
     /* i/o for compressed data */
     std::unique_ptr<std::streambuf> native_sbuf_;
+
+    /* native file descriptor (or other os-dependent handle).
+     * (could do away with this in c++26 at cost of dynamic cast to see if .native_sbuf refers to a filebuf)
+     */
+    native_handle_type native_fd_ = -1;
 
 #  ifndef NDEBUG
     bool debug_flag_ = false;

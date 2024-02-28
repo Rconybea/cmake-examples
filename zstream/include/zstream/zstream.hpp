@@ -41,7 +41,9 @@ public:
     using pos_type = typename Traits::pos_type;
     using off_type = typename Traits::off_type;
     using zstreambuf_type = basic_zstreambuf<CharT, Traits>;
+    using native_handle_type = int;
 
+    static constexpr native_handle_type c_empty_native_handle = -1;
     static constexpr std::streamsize c_default_buffer_size = zstreambuf_type::c_default_buf_z;
 
 public:
@@ -53,6 +55,7 @@ public:
     basic_zstream(std::streamsize buf_z = c_default_buffer_size,
                   std::ios::openmode mode = std::ios::in)
         : rdbuf_(buf_z,
+                 c_empty_native_handle /*native_fd*/,
                  nullptr /*native_sbuf*/,
                  mode),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
@@ -61,27 +64,51 @@ public:
     basic_zstream(std::streamsize buf_z,
                   std::unique_ptr<std::streambuf> native_sbuf,
                   std::ios::openmode mode)
-        : rdbuf_(buf_z, std::move(native_sbuf), mode),
+        : rdbuf_(buf_z,
+                 c_empty_native_handle /*native_fd*/,
+                 std::move(native_sbuf),
+                 mode),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
            {}
     /* convenience ctor;  apply default buffer size */
     basic_zstream(std::unique_ptr<std::streambuf> native_sbuf,
                   std::ios::openmode mode)
-        : basic_zstream(c_default_buffer_size, std::move(native_sbuf), mode) {}
-    /* convenience ctor;  creates filebuf attached to filename and opens it */
+        : basic_zstream(c_default_buffer_size,
+                        c_empty_native_handle /*native_fd*/,
+                        std::move(native_sbuf),
+                        mode)
+        {}
+    /* convenience ctor;  creates filebuf attached to filename and opens it.
+     *
+     * It might look like an oversight that we use xfilebuf here instead of basic_xfilebuf<CharT, Traits>.
+     * It's on purpose since refers to the compressed stream
+     */
     basic_zstream(std::streamsize buf_z,
                   char const * filename,
                   std::ios::openmode mode = std::ios::in)
         : rdbuf_(buf_z,
-                 std::unique_ptr<std::streambuf>((new std::filebuf())->open(filename,
-                                                                            std::ios::binary | mode)),
+                 c_empty_native_handle /*native_fd*/,
+                 nullptr /*native_sbuf*/,
                  mode),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
-        {}
+        {
+            if (filename
+                && (::strlen(filename) > 0))
+            {
+                std::unique_ptr<xfilebuf> p(new xfilebuf());
+
+                if (p->open(filename, std::ios::binary | mode)) {
+                    this->rdbuf_.adopt_native_sbuf(std::move(p),
+                                                   p->native_handle());
+                }
+            }
+        }
+
     /* convenience ctor;  apply default buffer size */
     basic_zstream(char const * filename,
                   std::ios::openmode mode = std::ios::in)
         : basic_zstream(c_default_buffer_size, filename, mode) {}
+
     ~basic_zstream() = default;
 
     zstreambuf_type * rdbuf() { return &rdbuf_; }
@@ -90,6 +117,8 @@ public:
     bool is_open() const { return rdbuf_.is_open(); }
     bool is_closed() const { return rdbuf_.is_closed(); }
     bool is_binary() const { return rdbuf_.is_binary(); }
+    native_handle_type native_handle() const { return rdbuf_.native_handle(); }
+
     /* (Re)open stream,  connected to a .gz file */
     void open(char const * filename,
               std::ios::openmode mode = std::ios::in)
