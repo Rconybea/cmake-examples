@@ -10,11 +10,15 @@ TEST_CASE("zstream", "[zstream]") {
 
     constexpr size_t c_buf_z = 64*1024;
 
+    /* length of text to be written */
+    size_t const c_text_z = ::strlen(Text::s_text);
+
     /* make some buffer space */
     using zbuf_type = array<char, c_buf_z>;
     unique_ptr<zbuf_type> zbuf(new zbuf_type());
     std::fill(zbuf->begin(), zbuf->end(), '\0');
 
+    size_t n_uc_out_total = 0;
     size_t n_z_out_total = 0;
 
     /* compress.. */
@@ -29,6 +33,8 @@ TEST_CASE("zstream", "[zstream]") {
 #      ifndef NDEBUG
         zs.set_debug_flag(c_debug_flag);
 #      endif
+
+        /* setting buffer memory so we can extract compressed text below */
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), zbuf->size());
 
         CHECK(zs.is_open());
@@ -36,7 +42,17 @@ TEST_CASE("zstream", "[zstream]") {
         CHECK(zs.rdbuf()->n_uc_out_total() == 0);
         CHECK(zs.rdbuf()->n_z_out_total() == 0);
 
+        zstream::off_type p0 = zs.tellp();
+
+        CHECK(p0 == 0);
+
         zs << Text::s_text << endl;
+
+        zstream::off_type p1 = zs.tellp();
+
+        CHECK(p1 == static_cast<zstream::off_type>(c_text_z));
+
+        n_uc_out_total = (p1 - p0);
 
         /* reminder:
          * 1. have to use .final_sync() or .close() to get complete compressed output.
@@ -87,16 +103,24 @@ TEST_CASE("zstream", "[zstream]") {
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), n_z_out_total);
 
-#ifdef NOT_USING
-        unique_ptr<zbuf_type> zbuf2(new zbuf_type());
-        std::fill(zbuf2->begin(), zbuf2->end(), '\0');
+#ifndef NDEBUG
+        zs.set_debug_flag(c_debug_flag);
 #endif
 
         unique_ptr<zbuf_type> ucbuf2(new zbuf_type());
         std::fill(ucbuf2->begin(), ucbuf2->end(), '\0');
 
-        zs.read(&((*ucbuf2)[0]), ucbuf2->size());
+        REQUIRE(ucbuf2->size() > n_uc_out_total);
+
+        size_t const c_req_z = ucbuf2->size();   // fails: 0 zs.gcount() after read
+        //size_t const c_req_z = n_uc_out_total; /* exact #of chars available */
+
+        CHECK(c_req_z == c_buf_z);
+
+        zs.read(&((*ucbuf2)[0]), c_req_z);
         streamsize n_read = zs.gcount();
+
+        CHECK(zs.fail()); /* reached eof before ucbuf2.size();  this sets failbit in .read() */
 
         CHECK(ucbuf2->size() == c_buf_z);
         CHECK(n_read == static_cast<streamsize>(strlen(Text::s_text) + 1));
