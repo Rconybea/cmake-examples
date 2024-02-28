@@ -128,15 +128,12 @@ public:
     bool is_binary() const { return rdbuf_.is_binary(); }
     native_handle_type native_handle() const { return rdbuf_.native_handle(); }
 
-<<<<<<< Updated upstream
-=======
     /* Allocate buffer space.  May use before reading/writing any data,  after calling ctor with 0 buf_z.
      * Does not preserve any existing buffer contents.
      * Not inteended to be used after beginning inflation/deflation work
      */
     void alloc(std::streamsize buf_z = c_default_buffer_size) { rdbuf_.alloc(buf_z); }
 
->>>>>>> Stashed changes
     /* (Re)open stream,  connected to a .gz file */
     void open(char const * filename,
               std::ios::openmode mode = std::ios::in)

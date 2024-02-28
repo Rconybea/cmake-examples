@@ -68,7 +68,6 @@ operator<< (std::ostream & os, hex_view const & ins) {
 }
 
 /* implementation of streambuf that provides output to, and input from, a compressed stream
-/* Implementation of streambuf that provides output to, and input from, a compressed stream.
  * Only uses calling thread;  not threadsafe.
  *
  * Example
@@ -181,8 +180,6 @@ public:
             }
         }
 
-<<<<<<< Updated upstream
-=======
     /* Allocate buffer space.  May use before reading/writing any data,  after calling ctor with 0 buf_z.
      * Does not preserve any existing buffer contents.
      * Not inteended to be used after beginning inflation/deflation work
@@ -195,7 +192,6 @@ public:
         this->setp_span(out_zs_.uc_avail());
     }
 
->>>>>>> Stashed changes
     /* x can refer to any streambuf implementation: stringbuf, filebuf, ..
      * fd for informational purposes
      */
