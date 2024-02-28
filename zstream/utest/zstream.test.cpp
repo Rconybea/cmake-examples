@@ -19,7 +19,8 @@ TEST_CASE("zstream", "[zstream]") {
 
     /* compress.. */
     {
-        zstream zs(64 * 1024, std::move(unique_ptr<streambuf>(new stringbuf())), ios::out);
+        //zstream zs(64 * 1024, std::move(unique_ptr<streambuf>(new stringbuf())), ios::out);
+        zstream zs(64 * 1024, unique_ptr<streambuf>(new stringbuf()), ios::out);
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), zbuf->size());
 
@@ -61,13 +62,15 @@ TEST_CASE("zstream", "[zstream]") {
     /* now decompress.. */
     {
         zstream zs(64 * 1024,
-                   std::move(unique_ptr<streambuf>(new stringbuf())),
+                   unique_ptr<streambuf>(new stringbuf()),
                    ios::in);
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), n_z_out_total);
 
+#ifdef NOT_USING
         unique_ptr<zbuf_type> zbuf2(new zbuf_type());
         std::fill(zbuf2->begin(), zbuf2->end(), '\0');
+#endif
 
         unique_ptr<zbuf_type> ucbuf2(new zbuf_type());
         std::fill(ucbuf2->begin(), ucbuf2->end(), '\0');
@@ -75,10 +78,11 @@ TEST_CASE("zstream", "[zstream]") {
         zs.read(&((*ucbuf2)[0]), ucbuf2->size());
         streamsize n_read = zs.gcount();
 
+        CHECK(ucbuf2->size() == c_buf_z);
         CHECK(n_read == static_cast<streamsize>(strlen(Text::s_text) + 1));
 
         INFO("uncompressed input:");
-        INFO(string_view(&((*ucbuf2)[0]), &((*ucbuf2)[n_read])));
+        INFO(string_view(&((*ucbuf2)[0]), n_read));
 
         for (streamsize i=0; i<n_read-1; ++i) {
             INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", ucbuf2[i]=", (*ucbuf2)[i]));
@@ -308,4 +312,3 @@ TEST_CASE("zstream-filebuf-reopen", "[zstream]") {
         ::remove(fname.c_str());
     }
 }
-
