@@ -58,10 +58,18 @@ class Test_zstream(unittest.TestCase):
                                openmode.output)
 
         self.assertEqual(zs.openmode(), openmode.output)
+        self.assertEqual(zs.is_readable(), False)
+        self.assertEqual(zs.is_writable(), True)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
+
         zs.close()
+
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
 
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
@@ -88,15 +96,21 @@ class Test_zstream(unittest.TestCase):
                                openmode.output)
 
         self.assertEqual(zs.openmode(), openmode.output)
+        self.assertEqual(zs.is_readable(), False)
+        self.assertEqual(zs.is_writable(), True)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
+
         s = 'hello, world!\n'
         n = zs.write(s)
 
         self.assertEqual(n, len(s))
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), n)
+
         zs.close()
 
         self.assertEqual(zs.tellg(), 0)
@@ -125,6 +139,10 @@ class Test_zstream(unittest.TestCase):
                                openmode.output)
 
         self.assertEqual(zs.openmode(), openmode.output)
+        self.assertEqual(zs.is_readable(), False)
+        self.assertEqual(zs.is_writable(), True)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.fail(), False)
         self.assertEqual(zs.tellg(), 0)
@@ -135,7 +153,11 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(n, len(s))
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), n)
+
         zs.close()
+
+        self.assertEqual(zs.is_open(), False)
+        self.assertEqual(zs.is_closed(), True)
 
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
@@ -146,6 +168,10 @@ class Test_zstream(unittest.TestCase):
                                openmode.input)
         # zs.open('hello.gz', openmode.input)
         self.assertEqual(zs.openmode(), openmode.input)
+        self.assertEqual(zs.is_readable(), True)
+        self.assertEqual(zs.is_writable(), False)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.fail(), False)
         self.assertEqual(zs.tellg(), 0)
