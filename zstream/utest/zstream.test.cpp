@@ -19,9 +19,21 @@ TEST_CASE("zstream", "[zstream]") {
 
     /* compress.. */
     {
+<<<<<<< Updated upstream
         //zstream zs(64 * 1024, std::move(unique_ptr<streambuf>(new stringbuf())), ios::out);
         zstream zs(64 * 1024, unique_ptr<streambuf>(new stringbuf()), ios::out);
+=======
+        unique_ptr<streambuf> native_sbuf(new stringbuf());
+>>>>>>> Stashed changes
 
+        /* note: c_buf_z here is othogonal to zbuf->size() */
+        zstream zs(c_buf_z,
+                   std::move(native_sbuf),
+                   ios::out);
+
+#      ifndef NDEBUG
+        zs.set_debug_flag(c_debug_flag);
+#      endif
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), zbuf->size());
 
         CHECK(zs.is_open());
@@ -31,8 +43,14 @@ TEST_CASE("zstream", "[zstream]") {
 
         zs << Text::s_text << endl;
 
-        /* reminder: have to close zstream to get complete compressed output. */
-        zs.close();
+        /* reminder:
+         * 1. have to use .final_sync() or .close() to get complete compressed output.
+         * 2. .close() would also reset byte counters like .n_z_out_total
+         */
+        zs.final_sync();
+
+        CHECK(zs.is_open());
+        CHECK(!zs.is_closed());
 
         if (c_debug_flag) {
             cout << "uc out: " << zs.rdbuf()->n_uc_out_total() << endl;
@@ -57,6 +75,13 @@ TEST_CASE("zstream", "[zstream]") {
         }
 
         n_z_out_total = n;
+
+        zs.close(); /*hygiene*/
+
+        CHECK(!zs.is_open());
+        CHECK(zs.is_closed());
+        CHECK(zs.rdbuf()->n_uc_out_total() == 0);
+        CHECK(zs.rdbuf()->n_z_out_total() == 0);
     }
 
     /* now decompress.. */
@@ -130,17 +155,15 @@ TEST_CASE("zstream-filebuf", "[zstream]") {
     for (size_t i_tc = 0; i_tc < s_testcase_v.size(); ++i_tc) {
         TestCase const & tc = s_testcase_v[i_tc];
 
-        INFO(tostr("i_tc=", i_tc));
+        std::string fname = tostr("test", i_tc, ".gz");
+
+        INFO(tostr("i_tc=", i_tc, ", fname=", fname));
 
         // ----------------------------------------------------------------
         // 1 - compress some text
         // ----------------------------------------------------------------
 
-        std::string fname = tostr("test", i_tc, ".gz");
-
         {
-            INFO(tostr("writing to fname=", fname));
-
             zstream zs(tc.buf_z_, fname.c_str(), ios::out);
 
             /* could just do
