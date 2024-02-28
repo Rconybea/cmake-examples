@@ -19,12 +19,7 @@ TEST_CASE("zstream", "[zstream]") {
 
     /* compress.. */
     {
-<<<<<<< Updated upstream
-        //zstream zs(64 * 1024, std::move(unique_ptr<streambuf>(new stringbuf())), ios::out);
-        zstream zs(64 * 1024, unique_ptr<streambuf>(new stringbuf()), ios::out);
-=======
         unique_ptr<streambuf> native_sbuf(new stringbuf());
->>>>>>> Stashed changes
 
         /* note: c_buf_z here is othogonal to zbuf->size() */
         zstream zs(c_buf_z,
