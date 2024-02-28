@@ -132,14 +132,20 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
         unique_ptr<streambuf> zsbuf = make_empty_stringbuf(zbuf.get(), sizeof(zbuf_type));
 
         /* tc.buf_z: for unit test want to exercise overflow.. frequently */
+#ifdef NOT_YET
         unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_, -1 /*native_fd*/, nullptr, ios::out));
+#endif
+        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_, nullptr, ios::out));
+
         /* final size of compressed output */
         std::size_t n_z_out_total = 0;
         /* final size of uncompressed output */
         std::size_t n_uc_out_total = 0;
         {
-
+#ifdef NOT_YET
             ogbuf->adopt_native_sbuf(std::move(zsbuf), -1 /*native_fd*/);
+#endif
+            ogbuf->adopt_native_sbuf(std::move(zsbuf));
 
             CHECK(ogbuf->n_uc_out_total() == 0);
             CHECK(ogbuf->n_z_out_total() == 0);

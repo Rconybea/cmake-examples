@@ -144,18 +144,30 @@ public:
             this->final_sync_flag_ = false;
             this->closed_flag_ = false;
 
-            std::unique_ptr<xfilebuf> p(new xfilebuf());
+            using filebuf_type = std::basic_filebuf<CharT, Traits>;
 
+            std::unique_ptr<filebuf_type> p(new filebuf_type());
+
+            if (p->open(filename, std::ios::binary | mode)) {
+                this->adopt_native_sbuf(std::move(p));
+            }
+#ifdef NOT_YET
+            std::unique_ptr<xfilebuf> p(new xfilebuf());
             if (p->open(filename, std::ios::binary | mode)) {
                 this->adopt_native_sbuf(std::move(p), p->native_handle());
             }
+#endif
+
         }
 
     /* x can refer to any streambuf implementation: stringbuf, filebuf, ..
      * fd for informational purposes
      */
-    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x,
-                           native_handle_type fd = -1)
+    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x
+#ifdef NOT_YET
+                           native_handle_type fd = -1
+#endif
+        )
         {
             native_sbuf_ = std::move(x);
 
@@ -164,8 +176,10 @@ public:
                 closed_flag_ = false;
             }
 
+#ifdef NOT_YET
             /* stash file descriptor,  if available */
             native_fd_ = fd;
+#endif
         }
 
 
