@@ -79,11 +79,9 @@ def test_empty_deflate_aux(self : unittest.TestCase,
       fname (str).                Filename to use for (empty) compressed stream
     """
 
-    from pyzstream import openmode
-
     self.log.debug("{id}: enter".format(id=unittest.TestCase.id(self)))
 
-    zs = ioclass(fname, openmode.output)
+    zs = ioclass(fname, 'w')
 
     # .isatty not actually known (needs isatty(fd))
     self.assertEqual(zs.isatty(), False)
@@ -132,11 +130,10 @@ def test_single_deflate_aux(self : unittest.TestCase,
       text (str).                 plain text to write to file.
       fname (str).                Filename to use for (empty) compressed stream
     """
-    from pyzstream import openmode
 
     self.log.debug("test_small_deflate: enter")
 
-    zs = ioclass(fname, openmode.output)
+    zs = ioclass(fname, 'w')
 
     test_writeonly_properties_aux(self, zs)
 
@@ -195,12 +192,11 @@ def test_multiline_deflate_aux(self,
       fname (str).                Filename to use for (empty) compressed stream
     """
 
-    from pyzstream import openmode
     from zstream import ZstreamBase
 
     self.log.debug("test_multiline_deflate_aux: enter")
 
-    zs = ioclass(fname, openmode.output)
+    zs = ioclass(fname, 'w')
 
     test_writeonly_properties_aux(self, zs)
 
@@ -248,12 +244,11 @@ def test_read_aux(self,
                                   Test fails is len(text) > 16384.
       fname (str).                Filename to use for (empty) compressed stream
     """
-    from pyzstream import openmode
     from zstream import ZstreamBase
 
     self.log.debug("test_read_aux: enter")
 
-    zs = ZstreamBase(fname, openmode.output)
+    zs = ZstreamBase(fname, 'w')
 
     n = len(text)
 
@@ -265,7 +260,7 @@ def test_read_aux(self,
 
     # now read from the file we just created
 
-    zs = ioclass(fname, openmode.input)
+    zs = ioclass(fname, 'r')
 
     test_readonly_properties_aux(self, zs)
     self.assertEqual(zs.eof(), False)
