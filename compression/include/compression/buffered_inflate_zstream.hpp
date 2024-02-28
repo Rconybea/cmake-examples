@@ -99,6 +99,9 @@ public:
 
     void uc_consume_all() { this->uc_consume(this->uc_contents()); }
 
+    /* inflate some input data (previously provided by .z_produce())
+     * returns #of bytes of inflated data appended to .uc_out_buf by this call
+     */
     size_type inflate_chunk();
 
     void swap(buffered_inflate_zstream & x) {

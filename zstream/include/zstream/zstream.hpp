@@ -45,6 +45,19 @@ public:
     static constexpr std::streamsize c_default_buffer_size = zstreambuf_type::c_default_buf_z;
 
 public:
+    /* caller must establish .rdbuf.native_sbuf before using zstream.
+     * either
+     * - .rdbuf()->adopt_native_sbuf(sbuf, native_fd)
+     * - .rdbuf()->open(fname, openmode)
+     */
+    basic_zstream(std::streamsize buf_z = c_default_buffer_size,
+                  std::ios::openmode mode = std::ios::in)
+        : rdbuf_(buf_z,
+                 nullptr /*native_sbuf*/,
+                 mode),
+          std::basic_iostream<CharT, Traits>(&rdbuf_)
+        {}
+
     basic_zstream(std::streamsize buf_z,
                   std::unique_ptr<std::streambuf> native_sbuf,
                   std::ios::openmode mode)
