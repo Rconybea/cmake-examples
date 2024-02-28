@@ -60,7 +60,6 @@ public:
     /* uncompressed content available */
     z_span_type uc_contents() const { return uc_out_buf_.contents(); }
 
-    /* after populating some prefix of .z_avail(), make existence of that input known
     /* reset buffers to empty state,  in case want to reuse *this for different input.
      * Calls ::inflateInit2()
      */
