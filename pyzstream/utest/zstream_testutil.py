@@ -46,12 +46,24 @@ def test_readonly_properties_aux(self : unittest.TestCase,
     test stream properties for an io.IOBase instance that's open for reading,
     where derived class is ZstreamBase, TextZstream or BufferedZstream.
     """
-
     self.assertTrue((ios.openmode() & pyzstream.openmode.input) == pyzstream.openmode.input)
     self.assertTrue((ios.openmode() & pyzstream.openmode.output) == pyzstream.openmode.none)
     self.assertEqual(ios.readable(), True)
     self.assertEqual(ios.writable(), False)
     self.assertEqual(ios.closed, False)
+
+def test_writeonly_properties_aux(self : unittest.TestCase,
+                                  ios : io.IOBase):
+    """
+    test stream properties for an io.IOBase instance that's open for writing,
+    where derived class is ZstreamBase, TextZstream or BufferedZstream
+    """
+    self.assertTrue((ios.openmode() & pyzstream.openmode.input) == pyzstream.openmode.none)
+    self.assertTrue((ios.openmode() & pyzstream.openmode.output) == pyzstream.openmode.output)
+    self.assertEqual(ios.readable(), False)
+    self.assertEqual(ios.writable(), True)
+    self.assertEqual(ios.closed, False)
+
 
 def test_empty_deflate_aux(self : unittest.TestCase,
                            ioclass : io.IOBase,
@@ -83,6 +95,10 @@ def test_empty_deflate_aux(self : unittest.TestCase,
     # .seek not supported
     with self.assertRaises(OSError):
         zs.seek(0, os.SEEK_CUR)
+
+    self.assertEqual(zs.tell(), 0)
+
+    test_writeonly_properties_aux(self, zs)
 
     zs.close()
 
@@ -122,6 +138,8 @@ def test_single_deflate_aux(self : unittest.TestCase,
 
     zs = ioclass(fname, openmode.output)
 
+    test_writeonly_properties_aux(self, zs)
+
     # needs file descriptor to implement
     self.assertEqual(zs.isatty(), False)
 
@@ -138,6 +156,9 @@ def test_single_deflate_aux(self : unittest.TestCase,
     n = zs.write(s)
 
     self.assertEqual(n, len(s))
+
+    test_writeonly_properties_aux(self, zs)
+    self.assertEqual(zs.tell(), len(s))
 
     zs.close()
 
@@ -181,13 +202,17 @@ def test_multiline_deflate_aux(self,
 
     zs = ioclass(fname, openmode.output)
 
+    test_writeonly_properties_aux(self, zs)
+
     zs.writelines(text_l)
 
     # count sum of bytes in text
     text = b''.join(text_l)
     n = len(text)
 
-    self.assertEqual(zs.tell(), n) # total #of uncompressed chars output
+    self.assertEqual(zs.tell(), n)   # total #of uncompressed chars output
+
+    test_writeonly_properties_aux(self, zs)
 
     zs.close()
 
