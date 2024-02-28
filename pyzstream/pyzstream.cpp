@@ -30,6 +30,29 @@ PYBIND11_MODULE(pyzstream, m) {
                                       [](py::object /*self*/) { return std::ios::binary; },
                                       py::doc("set this bit to operate stream in binary mode"
                                               " (disables automatic character processing)"))
+        /* note: for a zstream,  being open for both read/write is not useful without seek() */
+        .def_static("from_string",
+                    [](string const & s) {
+                        std::ios::openmode retval = static_cast<std::ios::openmode>(0);
+
+                        for (char ch : s) {
+                            /* other openmode flags:
+                             *   app (append), trunc (truncate), ate (at end), noreplace (exclusive)
+                             */
+
+                            if (ch == 'r')
+                                retval |=  std::ios::in;
+                            else if (ch == 'w')
+                                retval |= std::ios::out;
+                            else if (ch == 'b')
+                                retval |= std::ios::binary;
+                        }
+
+                        return retval;
+                    },
+                    py::arg("s"),
+                    py::doc("Convert string s to openmode. s may contain characters from {r,w,b}"
+                            "; r=input (read), w=output (write), b=binary"))
         .def("__eq__",
              [](std::ios::openmode x, std::ios::openmode y) { return x==y; },
              py::arg("other"),
@@ -98,6 +121,7 @@ PYBIND11_MODULE(pyzstream, m) {
      *
      * Instead plan to target the python File api.
      * Expect to wrap pyzstream into a python class that inherits from the python File class
+     *
      */
     py::class_<zstream>(m, "zstream")
         .def(py::init<std::streamsize, char const *, std::ios::openmode>(),
