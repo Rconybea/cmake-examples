@@ -29,6 +29,18 @@ class ZstreamBase(io.IOBase):
 
         super(ZstreamBase, self).__init__()
 
+    def openmode(self):
+        """
+        return native openmode bitmask (python wrapper for c++ std::ios::openmode)
+        """
+        return self._zstream.openmode()
+
+    def eof(self):
+        """
+        True if readable stream has encountered eof
+        """
+        return self._zstream.eof()
+
     def read(self, z = -1):
         """
         Broken!
@@ -45,9 +57,15 @@ class ZstreamBase(io.IOBase):
     # ----- inherited from IOBase -----
 
     def readable(self):
+        """
+        return true iff stream was last opened for reading.
+        """
         return self._zstream.is_readable()
 
     def writable(self):
+        """
+        return true iff stream was last opened for writing.
+        """
         return self._zstream.is_writable()
 
     def seekable(self):
@@ -55,6 +73,9 @@ class ZstreamBase(io.IOBase):
 
     @property
     def closed(self):
+        """
+        return true iff stream is in a closed state
+        """
         return self._zstream.is_closed()
 
     # def fileno(self):    # TODO

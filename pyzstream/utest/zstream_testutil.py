@@ -1,5 +1,6 @@
 # zstream_testutil.py
 
+import pyzstream
 import unittest
 import subprocess
 import io
@@ -38,6 +39,19 @@ def get_lorem_str():
                     "Orci porta non pulvinar neque laoreet suspendisse.\n",
                     "Adipiscing commodo elit at imperdiet dui.\n",
                     ])
+
+def test_readonly_properties_aux(self : unittest.TestCase,
+                                 ios : io.IOBase):
+    """
+    test stream properties for an io.IOBase instance that's open for reading,
+    where derived class is ZstreamBase, TextZstream or BufferedZstream.
+    """
+
+    self.assertTrue((ios.openmode() & pyzstream.openmode.input) == pyzstream.openmode.input)
+    self.assertTrue((ios.openmode() & pyzstream.openmode.output) == pyzstream.openmode.none)
+    self.assertEqual(ios.readable(), True)
+    self.assertEqual(ios.writable(), False)
+    self.assertEqual(ios.closed, False)
 
 def test_empty_deflate_aux(self : unittest.TestCase,
                            ioclass : io.IOBase,
@@ -83,7 +97,7 @@ def test_empty_deflate_aux(self : unittest.TestCase,
         # gunzip successfully produced empty output
         self.assertEqual(s, b'')
         self.assertEqual(subp.returncode, 0)
-    
+
 def test_single_deflate_aux(self : unittest.TestCase,
                             ioclass : io.IOBase,
                             text : bytes,
@@ -172,7 +186,7 @@ def test_multiline_deflate_aux(self,
     # count sum of bytes in text
     text = b''.join(text_l)
     n = len(text)
-    
+
     self.assertEqual(zs.tell(), n) # total #of uncompressed chars output
 
     zs.close()
@@ -224,12 +238,17 @@ def test_read_aux(self,
 
     zs.close()
 
-    # now read from lorem2.gz
+    # now read from the file we just created
 
     zs = ioclass(fname, openmode.input)
+
+    test_readonly_properties_aux(self, zs)
+    self.assertEqual(zs.eof(), False)
 
     # zs.read(-1) not supported yet
     s2 = zs.read(16384)
 
-    self.assertEqual(s2, text)
+    test_readonly_properties_aux(self, zs)
+    self.assertEqual(zs.eof(), True)
 
+    self.assertEqual(s2, text)
