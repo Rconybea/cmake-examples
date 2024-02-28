@@ -68,6 +68,30 @@ operator<< (std::ostream & os, hex_view const & ins) {
 }
 
 /* implementation of streambuf that provides output to, and input from, a compressed stream
+/* Implementation of streambuf that provides output to, and input from, a compressed stream.
+ * Only uses calling thread;  not threadsafe.
+ *
+ * Example
+ *
+ * 1. allocating buffer space from zstreambuf ctor
+ *
+ *    zstreambuf zbuf;
+ *
+ *    std::unique_ptr<xfilebuf> p(new filebuf());
+ *    if (p->open("path/to/file.gz", std::ios::in))
+ *        zbuf.adopt_native_sbuf(std::move(p), -1)
+ *
+ * 2. allocating buffer space separately after ctor
+ *
+ *    zstreambuf zbuf(0);
+ *
+ *    zbuf.alloc(64UL*1024UL);
+ *
+ *    std::unique_ptr<xfilebuf> p(new filebuf());
+ *    if (p->open("path/to/file.gz", std::ios::in))
+ *        zbuf.adopt_native_sbuf(std::move(p), -1)
+ *
+ *
  */
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstreambuf : public std::basic_streambuf<CharT, Traits> {
@@ -157,6 +181,21 @@ public:
             }
         }
 
+<<<<<<< Updated upstream
+=======
+    /* Allocate buffer space.  May use before reading/writing any data,  after calling ctor with 0 buf_z.
+     * Does not preserve any existing buffer contents.
+     * Not inteended to be used after beginning inflation/deflation work
+     */
+    void alloc(size_type buf_z = c_default_buf_z) {
+        in_zs_.alloc(buf_z, alignment());
+        out_zs_.alloc(buf_z, alignment());
+
+        this->setg_span(in_zs_.uc_contents());
+        this->setp_span(out_zs_.uc_avail());
+    }
+
+>>>>>>> Stashed changes
     /* x can refer to any streambuf implementation: stringbuf, filebuf, ..
      * fd for informational purposes
      */

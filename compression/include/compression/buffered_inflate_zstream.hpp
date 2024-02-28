@@ -60,6 +60,19 @@ public:
     /* uncompressed content available */
     z_span_type uc_contents() const { return uc_out_buf_.contents(); }
 
+<<<<<<< Updated upstream
+=======
+    /* Allocate buffer space.  May use before inflation, after calling ctor with 0 buf_z.
+     * Does not preserve any existing buffer contents -> not intended to be used
+     * after beginning inflation work.
+     */
+    void alloc(size_type buf_z = c_default_buf_z, size_type align_z = sizeof(char)) {
+        z_in_buf_.alloc(buf_z, sizeof(std::uint8_t));
+        uc_out_buf_.alloc(buf_z, align_z);
+        zs_algo_.provide_output(uc_out_buf_.avail());
+    }
+
+>>>>>>> Stashed changes
     /* reset buffers to empty state,  in case want to reuse *this for different input.
      * Calls ::inflateInit2()
      */

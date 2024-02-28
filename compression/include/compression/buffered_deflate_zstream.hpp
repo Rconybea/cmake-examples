@@ -69,6 +69,16 @@ public:
     /* compressed content available */
     z_span_type z_contents() const { return z_out_buf_.contents(); }
 
+    /* Allocate buffer space.  May use before deflation, after calling ctor with 0 buf_z.
+     * Does not preserve any existing buffer contents -> not intended to be used
+     * after beginning inflation work.
+     */
+    void alloc(size_type buf_z = c_default_buf_z, size_type align_z = sizeof(char)) {
+        uc_in_buf_.alloc(buf_z, align_z);
+        z_out_buf_.alloc(buf_z, sizeof(std::uint8_t));
+        zs_algo_.provide_output(z_out_buf_.avail());
+    }
+
     /* Reset buffers to empty state,  to reuse *this for different input.
      * Calls ::deflateInit2()
      */

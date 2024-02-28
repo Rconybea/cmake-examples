@@ -29,6 +29,15 @@
  *
  *     cout << "input: [" << x << "]" << endl;
  *   }
+ *
+ * Example 3 (deferred open)
+ *
+ *   zstream zs(0, nullptr, mode);  // or zstream zs;
+ *   zs.alloc(buf_z); // create buffers
+ *
+ *   std::unique_ptr<std::streambuf> sbuf = ...;  // streambuf for compressed data
+ *   int fd = -1;  // or file descriptor if known
+ *   zs.rdbuf()->adopt_native_sbuf(std::move(streambuf), fd)
  */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreorder"
@@ -119,6 +128,15 @@ public:
     bool is_binary() const { return rdbuf_.is_binary(); }
     native_handle_type native_handle() const { return rdbuf_.native_handle(); }
 
+<<<<<<< Updated upstream
+=======
+    /* Allocate buffer space.  May use before reading/writing any data,  after calling ctor with 0 buf_z.
+     * Does not preserve any existing buffer contents.
+     * Not inteended to be used after beginning inflation/deflation work
+     */
+    void alloc(std::streamsize buf_z = c_default_buffer_size) { rdbuf_.alloc(buf_z); }
+
+>>>>>>> Stashed changes
     /* (Re)open stream,  connected to a .gz file */
     void open(char const * filename,
               std::ios::openmode mode = std::ios::in)

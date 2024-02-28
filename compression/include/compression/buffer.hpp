@@ -97,6 +97,19 @@ public:
         }
     }
 
+    /* allocate buffer of size buf_z */
+    void alloc(size_type buf_z, size_type align_z = sizeof(char)) {
+        /* properly reset (+ discard) any existing state */
+        this->reset();
+
+        is_owner_ = true;
+        if (buf_z)
+            buf_ = new (std::align_val_t(align_z)) CharT [buf_z];
+        buf_z = buf_z;
+        lo_pos_ = 0;
+        hi_pos_ = 0;
+    }
+
     void setbuf(CharT * buf, size_type buf_z) {
         /* properly reset (+ discard) any existing state */
         this->reset();
