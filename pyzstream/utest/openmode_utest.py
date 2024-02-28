@@ -64,3 +64,17 @@ class Test_openmode(unittest.TestCase):
         self.assertEqual(~openmode.input, openmode.output | openmode.binary)
         self.assertEqual(~(openmode.input | openmode.binary), openmode.output)
 
+    def test_from_string(self):
+        from pyzstream import openmode
+
+        self.assertEqual(openmode.from_string('r'), openmode.input)
+        self.assertEqual(openmode.from_string('w'), openmode.output)
+        self.assertEqual(openmode.from_string('b'), openmode.binary)
+        self.assertEqual(openmode.from_string('br'),
+                         openmode.input | openmode.binary)
+        self.assertEqual(openmode.from_string('rb'),
+                         openmode.input | openmode.binary)
+        self.assertEqual(openmode.from_string('rw'),
+                         openmode.input | openmode.output)
+        self.assertEqual(openmode.from_string('rwb'),
+                         openmode.binary | openmode.input | openmode.output)
