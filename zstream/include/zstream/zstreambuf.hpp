@@ -111,14 +111,16 @@ public:
     /* Taking care with alignment: if CharT is a wide character type,  probably want/need aligned buffers
      * for uncompressed data.
      *
-     * buf_z : buffer size for inflation/deflation algorithm.  Buffer memory consumption is 4x this value.
-     *         Allocating memory separately for input (.in_zs), output (.out_zs):
-     *         - .in_zs.z_in_buf buffer compressed input
-     *         - .in_zs.uc_out_buf buffer uncompressed input
-     *         - .out_zs.uc_in_buf buffer uncompressed output
-     *         - .out_zs.z_out_buf buffer compressed output
-     *         Can use 0 to defer buffer allocation
-     * native_sbuf :  stream buffer for compressed data;  if this is a filebuf,  it should be open already
+     * buf_z       buffer size for inflation/deflation algorithm.  Buffer memory consumption is 4x this value.
+     *             Allocating memory separately for input (.in_zs), output (.out_zs):
+     *             - .in_zs.z_in_buf buffer compressed input
+     *             - .in_zs.uc_out_buf buffer uncompressed input
+     *             - .out_zs.uc_in_buf buffer uncompressed output
+     *             - .out_zs.z_out_buf buffer compressed output
+     *             Can use 0 to defer buffer allocation
+     * native_sbuf streambuf for doing compressed i/o.
+     *             if this is a filebuf,  it must be in an open state
+     * mode        open mode bitmask.
      */
     basic_zstreambuf(size_type buf_z = 64 * 1024,
                      native_handle_type fd = -1,
@@ -210,7 +212,6 @@ public:
             /* stash file descriptor,  if available */
             native_fd_ = fd;
         }
-
 
     /* Given that there will be no more uncompressed output,
      * commit remaining compressed portion to output stream.
