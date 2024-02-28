@@ -164,6 +164,9 @@ PYBIND11_MODULE(pyzstream, m) {
         .def("is_closed",
              &zstream::is_closed,
              py::doc("True if and only if stream is in a closed state."))
+        .def("native_handle",
+             &zstream::native_handle,
+             py::doc("Return stream file descriptor, if defined and known."))
         .def("open",
              &zstream::open,
              py::arg("filename"), py::arg("openmode"),

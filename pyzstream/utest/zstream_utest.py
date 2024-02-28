@@ -21,6 +21,29 @@ class Test_zstream(unittest.TestCase):
 
         super(Test_zstream, self).__init__(*args)
 
+    def test_ctor1(self):
+        from pyzstream import openmode
+
+        self.log.debug("\ntest_ctor1: present")
+
+        # default will have:
+        #   bufz = 64K  (4x this amount allocated)
+        #   openmode = input
+        #
+        zs = pyzstream.zstream()
+
+        self.assertEqual(zs.openmode(), openmode.input)
+        self.assertEqual(zs.is_readable(), True)
+        self.assertEqual(zs.is_writable(), False)
+        self.assertEqual(zs.is_open(), False)
+        self.assertEqual(zs.is_closed(), True)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.native_handle(), -1)
+
+        return
+
     def test_empty_deflate(self):
         from pyzstream import openmode
 
@@ -140,5 +163,3 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.tellp(), -1)
 
         zs.close()
-
-
