@@ -108,6 +108,15 @@ public:
         buf_z_ = buf_z;
     }
 
+    /* reset buffer pointers */
+    void clear2empty(bool zero_buffer_flag) {
+        if (buf_ && zero_buffer_flag)
+            ::explicit_bzero(buf_, buf_z_ * sizeof(CharT));
+
+        lo_pos_ = 0;
+        hi_pos_ = 0;
+    }
+
     void swap (buffer & x) {
         std::swap(is_owner_, x.is_owner_);
         std::swap(buf_, x.buf_);

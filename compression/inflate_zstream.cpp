@@ -91,3 +91,8 @@ inflate_zstream::teardown() {
     ::inflateEnd(p_native_zs_.get());
 }
 
+void
+inflate_zstream::rebuild() {
+    this->teardown();
+    this->setup();
+}

@@ -85,6 +85,33 @@ namespace {
     };
 }
 
+namespace {
+    using zbuf_type = array<char, 64*1024>;
+
+    /* create null-padded 64k buffer */
+    unique_ptr<zbuf_type>
+    make_empty_zbuf()
+    {
+        unique_ptr<zbuf_type> zbuf(new zbuf_type());
+
+        for (size_t i=0, n=sizeof(zbuf_type); i<n; ++i)
+            (*zbuf)[i] = '\0';
+
+        return zbuf;
+    }
+
+    /* empty stringbuf,  using zbuf[0 .. zbuf_size-1] for storage */
+    unique_ptr<stringbuf>
+    make_empty_stringbuf(zbuf_type * zbuf, size_t zbuf_size)
+    {
+        unique_ptr<stringbuf> sbuf(new stringbuf());
+
+        sbuf->pubsetbuf(&((*zbuf)[0]), zbuf_size);
+
+        return sbuf;
+    }
+}
+
 TEST_CASE("zstreambuf", "[zstreambuf]") {
     /* true to enable some logging,  useful if this unit test should fail */
     constexpr bool c_debug_flag = false;
@@ -99,56 +126,73 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
         // ----------------------------------------------------------------
 
         /* buffer to hold compressed output */
-        using zbuf_type = array<char, 64*1024>;
-        unique_ptr<zbuf_type> zbuf(new zbuf_type());
-
-        for (size_t i=0, n=sizeof(zbuf_type); i<n; ++i)
-            (*zbuf)[i] = '\0';
+        unique_ptr<zbuf_type> zbuf = make_empty_zbuf();
 
         /* compressed output will appear here */
-        unique_ptr<streambuf> zsbuf(new stringbuf());
+        unique_ptr<streambuf> zsbuf = make_empty_stringbuf(zbuf.get(), sizeof(zbuf_type));
 
-        zsbuf->pubsetbuf(&((*zbuf)[0]), sizeof(zbuf_type));
+        /* tc.buf_z: for unit test want to exercise overflow.. frequently */
+        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_, -1 /*native_fd*/, nullptr, ios::out));
+        /* final size of compressed output */
+        std::size_t n_z_out_total = 0;
+        /* final size of uncompressed output */
+        std::size_t n_uc_out_total = 0;
+        {
 
-        /* 256: for unit test want to exercise overflow.. frequently */
-        unique_ptr<zstreambuf> ogbuf(new zstreambuf(tc.buf_z_, nullptr, ios::out));
+            ogbuf->adopt_native_sbuf(std::move(zsbuf), -1 /*native_fd*/);
 
-        ogbuf->adopt_native_sbuf(std::move(zsbuf));
+            CHECK(ogbuf->n_uc_out_total() == 0);
+            CHECK(ogbuf->n_z_out_total() == 0);
 
-        /* write from s_text in small chunk sizes */
-        size_t const c_write_z = tc.write_chunk_z_;
+            /* write from s_text in small chunk sizes */
+            size_t const c_write_z = tc.write_chunk_z_;
 
-        for (size_t i=0, n=strlen(Text::s_text); i<n;) {
-            size_t nreq = std::min(c_write_z, n-i);
-            REQUIRE(ogbuf->sputn(Text::s_text + i, nreq) == static_cast<streamsize>(nreq));
+            size_t n_uc = strlen(Text::s_text);
 
-            i += nreq;
-        }
+            for (size_t i=0; i<n_uc;) {
+                size_t nreq = std::min(c_write_z, n_uc-i);
+                REQUIRE(ogbuf->sputn(Text::s_text + i, nreq) == static_cast<streamsize>(nreq));
 
-        ogbuf->close();
-
-        if (c_debug_flag) {
-            cout << "uc out: " << ogbuf->n_uc_out_total() << endl;
-            cout << "z  out: " << ogbuf->n_z_out_total() << endl;
-
-            size_t i = 0;
-            size_t n = ogbuf->n_z_out_total();
-            while (i < n) {
-                /* 64 hex values */
-                do {
-                    uint8_t ch = (*zbuf)[i];
-                    uint8_t lo = ch & 0xf;
-                    uint8_t hi = ch >> 4;
-                    char lo_ch = (lo < 10) ? '0' + lo : 'a' + lo - 10;
-                    char hi_ch = (hi < 10) ? '0' + hi : 'a' + hi - 10;
-
-                    cout << " " << hi_ch << lo_ch;
-
-                    ++i;
-                } while ((i < n) && (i % 64 != 0));
-
-                cout << endl;
+                i += nreq;
             }
+
+            ogbuf->final_sync();
+
+            CHECK(ogbuf->n_uc_out_total() == n_uc);
+            if (n_uc > 0)
+                CHECK(ogbuf->n_z_out_total() > 0);
+
+            n_z_out_total = ogbuf->n_z_out_total();
+            n_uc_out_total = ogbuf->n_uc_out_total();
+
+            if (c_debug_flag) {
+                cout << "uc out: " << ogbuf->n_uc_out_total() << endl;
+                cout << "z  out: " << ogbuf->n_z_out_total() << endl;
+
+                size_t i = 0;
+                size_t n = ogbuf->n_z_out_total();
+                while (i < n) {
+                    /* 64 hex values */
+                    do {
+                        uint8_t ch = (*zbuf)[i];
+                        uint8_t lo = ch & 0xf;
+                        uint8_t hi = ch >> 4;
+                        char lo_ch = (lo < 10) ? '0' + lo : 'a' + lo - 10;
+                        char hi_ch = (hi < 10) ? '0' + hi : 'a' + hi - 10;
+
+                        cout << " " << hi_ch << lo_ch;
+
+                        ++i;
+                    } while ((i < n) && (i % 64 != 0));
+
+                    cout << endl;
+                }
+            }
+
+            ogbuf->close();
+
+            CHECK(ogbuf->n_uc_out_total() == 0);
+            CHECK(ogbuf->n_z_out_total() == 0);
         }
 
         // ----------------------------------------------------------------
@@ -156,36 +200,38 @@ TEST_CASE("zstreambuf", "[zstreambuf]") {
         //           make sure we recover original text
         // ----------------------------------------------------------------
 
-        unique_ptr<streambuf> zsbuf2(new stringbuf());
-        zsbuf2->pubsetbuf(&((*zbuf)[0]), ogbuf->n_z_out_total());
+        {
+            unique_ptr<streambuf> zsbuf2(new stringbuf());
+            zsbuf2->pubsetbuf(&((*zbuf)[0]), n_z_out_total);
 
-        unique_ptr<zstreambuf> ogbuf2(new zstreambuf(tc.buf_z_));
-        ogbuf2->adopt_native_sbuf(std::move(zsbuf2));
+            unique_ptr<zstreambuf> ogbuf2(new zstreambuf(tc.buf_z_));
+            ogbuf2->adopt_native_sbuf(std::move(zsbuf2));
 
-        /* read from ogbuf2 in small chunk sizes */
-        unique_ptr<zbuf_type> ucbuf2(new zbuf_type());
+            /* read from ogbuf2 in small chunk sizes */
+            unique_ptr<zbuf_type> ucbuf2(new zbuf_type());
 
-        size_t const c_read_z = tc.read_chunk_z_;
-        size_t i_uc = 0;
-        size_t n_uc = 0;
+            size_t const c_read_z = tc.read_chunk_z_;
+            size_t i_uc = 0;
+            size_t n_uc = 0;
 
-        do {
-            n_uc = ogbuf2->sgetn(&((*ucbuf2)[i_uc]), c_read_z);
-            i_uc += n_uc;
-        } while (n_uc == c_read_z);
+            do {
+                n_uc = ogbuf2->sgetn(&((*ucbuf2)[i_uc]), c_read_z);
+                i_uc += n_uc;
+            } while (n_uc == c_read_z);
 
-        //INFO(tostr("uc_buf2=", hex_view(&(*ucbuf2)[0], &(*ucbuf2)[ogbuf2->n_uc_in_total()], true /*as_text*/)));
-        INFO(text_compare(string_view(Text::s_text),
-                          string_view(&(*ucbuf2)[0], &(*ucbuf2)[i_uc])));
+            //INFO(tostr("uc_buf2=", hex_view(&(*ucbuf2)[0], &(*ucbuf2)[ogbuf2->n_uc_in_total()], true /*as_text*/)));
+            INFO(text_compare(string_view(Text::s_text),
+                              string_view(&(*ucbuf2)[0], &(*ucbuf2)[i_uc])));
 
-        CHECK(ogbuf2->n_z_in_total() == ogbuf->n_z_out_total());
-        CHECK(ogbuf2->n_uc_in_total() == ogbuf->n_uc_out_total());
-        CHECK(i_uc == ::strlen(Text::s_text));
+            CHECK(ogbuf2->n_z_in_total() == n_z_out_total);
+            CHECK(ogbuf2->n_uc_in_total() == n_uc_out_total);
+            CHECK(i_uc == ::strlen(Text::s_text));
 
-        for (size_t i=0; i<i_uc; ++i) {
-            INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", ucbuf2[i]=", (*ucbuf2)[i]));
+            for (size_t i=0; i<i_uc; ++i) {
+                INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", ucbuf2[i]=", (*ucbuf2)[i]));
 
-            REQUIRE(Text::s_text[i] == (*ucbuf2)[i]);
+                REQUIRE(Text::s_text[i] == (*ucbuf2)[i]);
+            }
         }
     }
 }

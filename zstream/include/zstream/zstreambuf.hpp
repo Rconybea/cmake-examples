@@ -149,11 +149,23 @@ public:
             this->in_uc_pos_ = 0;
             this->out_uc_pos_ = 0;
 
+            /* invokes ::inflateEnd() then ::inflateInit2() */
+            this->in_zs_.clear2empty(false /*zero_buffer_flag*/);
+            /* invokes ::deflateEnd() then ::deflateInit2() */
+            this->out_zs_.clear2empty(false /*zero_buffer_flag*/);
+
             /* .native_sbuf may need to flush (e.g. if it's actually a filebuf).
              * The only way to invoke that behavior through the basic_streambuf api
              * is to invoke destructor,  so that's what we do here
              */
             this->native_sbuf_.reset();
+
+            /* also for consistency,  clear builtin streambuf pointers:
+             * 1. no input (.setg_span())
+             * 2. entire buffer available for output (.setp_span())
+             */
+            this->setg_span(this->in_zs_.uc_contents());
+            this->setp_span(this->out_zs_.uc_avail());
         }
     }
 

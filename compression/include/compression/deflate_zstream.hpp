@@ -22,6 +22,9 @@ public:
     deflate_zstream(deflate_zstream const & x) = delete;
     ~deflate_zstream();
 
+    /* cleanup+reestablish nominal .p_native_zs state */
+    void rebuild();
+
     /* compress some output,  return #of compressed bytes obtained
      *
      * final_flag.  must set to true end of uncompressed input reached,
@@ -36,7 +39,6 @@ public:
         base_zstream::swap(x);
     }
 
-    /* move-assignment */
     deflate_zstream & operator= (deflate_zstream && x) {
         base_zstream::operator=(std::move(x));
         return *this;

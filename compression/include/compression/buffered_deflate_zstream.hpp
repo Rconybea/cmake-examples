@@ -69,6 +69,16 @@ public:
     /* compressed content available */
     z_span_type z_contents() const { return z_out_buf_.contents(); }
 
+    /* Reset buffers to empty state,  to reuse *this for different input.
+     * Calls ::deflateInit2()
+     */
+    void clear2empty(bool zero_buffer_flag) {
+        uc_in_buf_.clear2empty(zero_buffer_flag);
+        z_out_buf_.clear2empty(zero_buffer_flag);
+        zs_algo_.rebuild();
+        zs_algo_.provide_output(z_out_buf_.avail());
+    }
+
     /* after populating some prefix of .uc_avail(),  make existence of that output
      * known to .output_zs so it can be compressed
      */

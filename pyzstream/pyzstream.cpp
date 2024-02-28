@@ -135,6 +135,10 @@ PYBIND11_MODULE(pyzstream, m) {
         .def("is_closed",
              &zstream::is_closed,
              py::doc("True if and only if stream is in a closed state."))
+        .def("open",
+             &zstream::open,
+             py::arg("filename"), py::arg("openmode"),
+             py::doc("Connect stream to filename,  open for input/output according to openmode"))
         .def("eof",
              [](zstream & zs) { return zs.eof(); },
              py::doc("True if and only if input stream has reached end of file."))
@@ -205,10 +209,14 @@ PYBIND11_MODULE(pyzstream, m) {
 
                      return (p1 - p0);
                  })
-        .def("close", &zstream::close)
         .def("sync",
              &zstream::sync,
              py::doc("Sync stream state with filesystem (i.e. flush output)."))
+        .def("close",
+             &zstream::close,
+             py::doc("Close stream and any associated file;"
+                     " revert stream to closed state with empty buffers.\n"
+                     "Can reopen stream (perhaps connected to a different file) with zstream.open()."))
         .def("__repr__",
              [](zstream & /*zs*/)
                  {

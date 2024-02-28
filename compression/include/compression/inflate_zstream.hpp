@@ -21,6 +21,9 @@ public:
     inflate_zstream(inflate_zstream const & x) = delete;
     ~inflate_zstream();
 
+    /* cleanup+reestablish nominal .p_native_zs state */
+    void rebuild();
+
     /* uncompress some input.
      *
      * .first  = span for compressed bytes consumed
@@ -32,7 +35,6 @@ public:
         base_zstream::swap(x);
     }
 
-    /* move-assignment */
     inflate_zstream & operator= (inflate_zstream && x) {
         base_zstream::operator=(std::move(x));
         return *this;

@@ -77,6 +77,16 @@ public:
     bool is_open() const { return rdbuf_.is_open(); }
     bool is_closed() const { return rdbuf_.is_closed(); }
     bool is_binary() const { return rdbuf_.is_binary(); }
+    /* (Re)open stream,  connected to a .gz file */
+    void open(char const * filename,
+              std::ios::openmode mode = std::ios::in)
+        {
+            /* clear state bits,  in case we previously used this stream for i/o */
+            this->clear();
+
+            this->rdbuf_.open(filename, mode);
+        }
+
 
     /* move-assignment */
     basic_zstream & operator=(basic_zstream && x) {
@@ -103,6 +113,9 @@ public:
     /* closes stream;  incorporates .final_sync() */
     void close() {
         this->rdbuf_.close();
+
+        /* clear state bits:  in particular need to clear any of {eofbit, failbit, badbit} */
+        this->clear();
     }
 
 #  ifndef NDEBUG

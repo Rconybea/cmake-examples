@@ -91,3 +91,8 @@ deflate_zstream::teardown() {
     ::deflateEnd(p_native_zs_.get());
 }
 
+void
+deflate_zstream::rebuild() {
+    this->teardown();
+    this->setup();
+}

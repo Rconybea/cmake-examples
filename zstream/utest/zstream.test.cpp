@@ -23,6 +23,11 @@ TEST_CASE("zstream", "[zstream]") {
 
         zs.rdbuf()->native_sbuf()->pubsetbuf(&((*zbuf)[0]), zbuf->size());
 
+        CHECK(zs.is_open());
+        CHECK(!zs.is_closed());
+        CHECK(zs.rdbuf()->n_uc_out_total() == 0);
+        CHECK(zs.rdbuf()->n_z_out_total() == 0);
+
         zs << Text::s_text << endl;
 
         /* reminder: have to close zstream to get complete compressed output. */
@@ -100,14 +105,18 @@ namespace {
     };
 
     static vector<TestCase> s_testcase_v = {
-        TestCase(1, 1, 1),
-        TestCase(1, 256, 256),
-        TestCase(256, 15, 15),
-        TestCase(256, 16, 16),
-        TestCase(256, 17, 17),
-        TestCase(256, 129, 129),
-        TestCase(65536, 129, 129),
-        TestCase(65536, 65536, 65536)
+        /*       buf_z
+         *               write_chunk_z
+         *                          read_chunk_z
+         */
+        TestCase(    1,      1,     1),
+        TestCase(    1,    256,   256),
+        TestCase(  256,     15,    15),
+        TestCase(  256,     16,    16),
+        TestCase(  256,     17,    17),
+        TestCase(  256,    129,   129),
+        TestCase(65536,    129,   129),
+        TestCase(65536,  65536, 65536)
     };
 }
 
@@ -192,3 +201,111 @@ TEST_CASE("zstream-filebuf", "[zstream]") {
         ::remove(fname.c_str());
     }
 }
+
+/* use zstream + write to file on disk.
+ * use the same zstream instance for each test + use .open() at the start of each test case
+ *
+ * For this test ignore TestCase.buf_z
+ */
+TEST_CASE("zstream-filebuf-reopen", "[zstream]") {
+#  ifndef NDEBUG
+    /* true to enable some logging,  useful if this unit test should fail */
+    constexpr bool c_debug_flag = false;
+#  endif
+
+    zstream zs_out(256 /*buf_z*/);
+    zstream zs_in(256 /*buf_z*/);
+
+#  ifndef NDEBUG
+    zs_out.set_debug_flag(c_debug_flag);
+    zs_in.set_debug_flag(c_debug_flag);
+#  endif
+
+    for (size_t i_tc = 0; i_tc < s_testcase_v.size(); ++i_tc) {
+        TestCase const & tc = s_testcase_v[i_tc];
+
+        std::string fname = tostr("test", i_tc, ".gz");
+
+        INFO(tostr("i_tc=", i_tc, ", fname=", fname));
+
+        // ----------------------------------------------------------------
+        // 1 - compress some text
+        // ----------------------------------------------------------------
+
+        {
+            INFO(tostr("writing to fname=", fname));
+
+            zs_out.open(fname.c_str(), ios::out);
+
+            /* could just do
+             *   zs_out.write(Text::s_text, strlen(Text::s_text))
+             * here.
+             *
+             * Instead write from s_text in small chunk sizes
+             */
+            size_t const c_write_z = tc.write_chunk_z_;
+
+            size_t i = 0;
+            size_t n = strlen(Text::s_text);
+
+            INFO(tostr("i=", i, ", n=", n, ", c_write_z=", c_write_z));
+
+            for (size_t i=0, n=strlen(Text::s_text); i<n;) {
+                size_t nreq = std::min(c_write_z, n-i);
+
+                zs_out.write(Text::s_text + i, nreq);
+                i += nreq;
+            }
+
+            zs_out.close();
+        }
+
+        // ----------------------------------------------------------------
+        // 2 - uncompress + verify
+        // ----------------------------------------------------------------
+
+        /* NOTE:
+         * Can also demonstrate successful compression step with for example
+         *   $ gunzip -c test0.gz
+         */
+
+        {
+            INFO(tostr("reading from fname=", fname));
+
+            zs_in.open(fname.c_str(), ios::in);
+
+            CHECK(zs_in.good()); /* !eofbit && !failbit && !badbit */
+
+            std::string input;
+            input.resize(strlen(Text::s_text));
+
+            size_t const c_read_z = tc.read_chunk_z_;
+            size_t n_uc = 0;
+            size_t i_uc = 0;
+            do {
+                INFO(tostr("n_uc=", n_uc, ", c_read_z=", c_read_z));
+
+                zs_in.read(input.data() + n_uc, c_read_z);
+                i_uc = zs_in.gcount();
+                n_uc += i_uc;
+            } while (i_uc == c_read_z);
+
+            REQUIRE(n_uc == input.size());
+
+            CHECK(n_uc == ::strlen(Text::s_text));
+
+            for (size_t i=0; i<n_uc; ++i) {
+                INFO(tostr("i=", i, ", s_text[i]=", Text::s_text[i], ", input[i]=", input[i]));
+
+                REQUIRE(Text::s_text[i] == input[i]);
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // 3 - cleanup
+        // ----------------------------------------------------------------
+
+        ::remove(fname.c_str());
+    }
+}
+

@@ -61,6 +61,18 @@ public:
     z_span_type uc_contents() const { return uc_out_buf_.contents(); }
 
     /* after populating some prefix of .z_avail(), make existence of that input known
+    /* reset buffers to empty state,  in case want to reuse *this for different input.
+     * Calls ::inflateInit2()
+     */
+    void clear2empty(bool zero_buffer_flag) {
+        z_in_buf_.clear2empty(zero_buffer_flag);
+        uc_out_buf_.clear2empty(zero_buffer_flag);
+        /* reinitialize (ctor calls ::inflateInit2()) */
+        zs_algo_.rebuild();
+        zs_algo_.provide_output(uc_out_buf_.avail());
+    }
+
+    /* After populating some prefix of .z_avail(), make existence of that input known
      * so that it can be uncompressed
      */
     void z_produce(z_span_type const & span) {
