@@ -14,18 +14,27 @@ class ZstreamBase(io.IOBase):
 
     def __init__(self,
                  filename : str | bytes | os.PathLike,
-                 mode = pyzstream.openmode.input,
+                 mode : str = 'r',
                  bufsize = 64*1024):
         """
-        Broken! python I/O expects to use string like 'rb' to specify openmode
+        create ZstreamBase for i/o w.r.t. filename.
+
+        Args:
+          filename (str|bytes|os.PathLike)
+                        path to file on disk.
+          mode (str)    string comprising letter codes:
+                        [r] open for reading, [w] open for writing,
+                        [b] binary mode, [t] text mode (default)
+                        (note: python [a], [x] not supported)
+          bufsize (int) buffer size;  used for both compressed +
+                        uncompressed data
         """
 
-        #zstream_mode = pyzstream.openmode.from_string(mode)
+        zstream_mode = pyzstream.openmode.from_string(mode)
 
         self._zstream = pyzstream.zstream(bufsize,
                                           os.fspath(filename),
-                                          mode)
-        #self._zstream = pyzstream.zstream(bufsize, filename, zstream_mode)
+                                          zstream_mode)
 
         super(ZstreamBase, self).__init__()
 
@@ -129,11 +138,11 @@ class BufferedZstream(ZstreamBase, io.BufferedIOBase):
 
     def __init__(self,
                  filename : str | bytes | os.PathLike,
-                 mode = pyzstream.openmode.input,
+                 mode : str = 'rb',
                  bufsize = 64*1024):
         # super() invokes ZstreamBase ctor first
         super(BufferedZstream, self).__init__(filename,
-                                              mode | pyzstream.openmode.binary,
+                                              mode + 'b',
                                               bufsize)
 
     # def read1(z = -1):   # TODO
@@ -151,7 +160,7 @@ class TextZstream(ZstreamBase, io.TextIOBase):
 
     def __init__(self,
                  filename : str | bytes | os.PathLike,
-                 mode = pyzstream.openmode.input,
+                 mode : str = 'r',
                  bufsize = 64*1024):
         # init ZstreamBase first
         super(TextZstream, self).__init__(filename, mode, bufsize)
