@@ -124,7 +124,50 @@ public:
 
     std::streambuf * native_sbuf() const { return native_sbuf_.get(); }
 
-    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x) { native_sbuf_ = std::move(x); }
+    /* (Re)open streambuf,  connected to a file
+     *
+     * mode:  only ios::in, ios::out supported.
+     *        (ios::app, ios::trunc, ios::ate, ios::noreplace not supported)
+     */
+    void open(char const * filename,
+              std::ios::openmode mode = std::ios::in)
+        {
+            /* 1. cleanup any existing state
+             *    (amongst other things,  destroys native sbuf.
+             *     puts buffers (including streambuf position) into consistent nominal state)
+             */
+            this->close();
+
+            /* 2. establish new state,  preserving buffer memory address ranges */
+
+            this->openmode_ = mode;
+            this->final_sync_flag_ = false;
+            this->closed_flag_ = false;
+
+            std::unique_ptr<xfilebuf> p(new xfilebuf());
+
+            if (p->open(filename, std::ios::binary | mode)) {
+                this->adopt_native_sbuf(std::move(p), p->native_handle());
+            }
+        }
+
+    /* x can refer to any streambuf implementation: stringbuf, filebuf, ..
+     * fd for informational purposes
+     */
+    void adopt_native_sbuf(std::unique_ptr<std::streambuf> x,
+                           native_handle_type fd = -1)
+        {
+            native_sbuf_ = std::move(x);
+
+            if (native_sbuf_) {
+                final_sync_flag_ = false;  /*redundant; to remove all doubt*/
+                closed_flag_ = false;
+            }
+
+            /* stash file descriptor,  if available */
+            native_fd_ = fd;
+        }
+
 
     /* Given that there will be no more uncompressed output,
      * commit remaining compressed portion to output stream.
