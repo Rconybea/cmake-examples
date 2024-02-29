@@ -349,7 +349,13 @@ PYBIND11_MODULE(pyzstream, m) {
              py::arg("hint") = -1,
              py::doc("Read stream content (uncompressing), splitting into lines on each newline.\n"
                      "If hint >= 0,  stop once total number of chars read reaches hint.\n"))
+<<<<<<< Updated upstream
         .def("write",
+<<<<<<< Updated upstream
+=======
+=======
+        .def("write",
+>>>>>>> Stashed changes
              [](zstream & zs, py::object const & x) -> uint64_t
                  {
                      uint64_t retval = 0;
@@ -439,6 +445,8 @@ PYBIND11_MODULE(pyzstream, m) {
                      "x must be a str (for stream opened in text mode),\n"
                      "or bytes-like object (for stream opened in binary mode).\n"
                      "Returns the number of (uncompressed) bytes written\n"))
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
         .def("sync",
              &zstream::sync,
              py::doc("Sync stream state with filesystem (i.e. flush output)."))
@@ -447,6 +455,10 @@ PYBIND11_MODULE(pyzstream, m) {
              py::doc("Close stream and any associated file;"
                      " revert stream to closed state with empty buffers.\n"
                      "Can reopen stream (perhaps connected to a different file) with zstream.open()."))
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
         .def("__repr__",
              [](zstream & /*zs*/)
                  {
