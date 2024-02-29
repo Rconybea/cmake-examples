@@ -253,6 +253,33 @@ PYBIND11_MODULE(pyzstream, m) {
                      " but stop on first occurence of delim.\n"
                      "Sets eof bit (but not fail bit) if less than z characters are available.\n"))
         .def("write",
+        .def("readlines",
+             [](zstream & zs, std::streamsize hint = -1)
+                 {
+                     list<string> retval;
+
+                     bool using_hint_flag = (hint >= 0);
+
+                     while (!zs.eof() && (!using_hint_flag || (hint >= 0))) {
+                         std::string s = zs.read_until(true /*check_delim_flag*/, '\n', 4095 /*block_size*/);
+
+                         if (s.empty()) {
+                             /* since we're reading lines,
+                              * a non-endofline delimited line implies end-of-file
+                              */
+                             break;
+                         }
+
+                         hint -= s.size();
+
+                         retval.push_back(s);
+                     }
+
+                     return retval;
+                 },
+             py::arg("hint") = -1,
+             py::doc("Read stream content (uncompressing), splitting into lines on each newline.\n"
+                     "If hint >= 0,  stop once total number of chars read reaches hint.\n"))
              [](zstream & zs, std::string const & x)
                  {
                      zstream::pos_type p0 = zs.tellp();
