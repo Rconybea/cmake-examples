@@ -50,10 +50,9 @@ class Test_BufferedZstream(unittest.TestCase):
                                    fname=fname)
 
     def test_read(self):
-        text = get_lorem_str()
+        text = get_lorem_bytes()
         fname = pathlib.Path(self.tmpdir, 'read3.gz')
         test_read_aux(self,
                       ioclass=zstream.BufferedZstream,
                       text=text,
                       fname=fname)
-

@@ -40,6 +40,9 @@ def get_lorem_str():
                     "Adipiscing commodo elit at imperdiet dui.\n",
                     ])
 
+def get_lorem_bytes():
+    return b''.join(get_lorem_bytes_l())
+
 def test_readonly_properties_aux(self : unittest.TestCase,
                                  ios : io.IOBase):
     """
@@ -192,8 +195,6 @@ def test_multiline_deflate_aux(self,
       fname (str).                Filename to use for (empty) compressed stream
     """
 
-    from zstream import ZstreamBase
-
     self.log.debug("test_multiline_deflate_aux: enter")
 
     zs = ioclass(fname, 'w')
@@ -244,11 +245,10 @@ def test_read_aux(self,
                                   Test fails is len(text) > 16384.
       fname (str).                Filename to use for (empty) compressed stream
     """
-    from zstream import ZstreamBase
 
     self.log.debug("test_read_aux: enter")
 
-    zs = ZstreamBase(fname, 'w')
+    zs = ioclass(fname, 'w')
 
     n = len(text)
 

@@ -8,7 +8,7 @@ import logging
 import pathlib
 import os
 
-class Test_TextZstream(unittest.TestCase):    
+class Test_TextZstream(unittest.TestCase):
     """
     TextZstream unit tests (see pyzstream/zstream.py for python impl)
 
@@ -36,7 +36,7 @@ class Test_TextZstream(unittest.TestCase):
     def test_single_deflate(self):
         fname = pathlib.Path(self.tmpdir, 'hello4.gz')
         test_single_deflate_aux(self,
-                                ioclass=zstream.BufferedZstream,
+                                ioclass=zstream.TextZstream,
                                 text=b'I see... stars!',
                                 fname=fname)
 
@@ -44,7 +44,7 @@ class Test_TextZstream(unittest.TestCase):
         text_l = get_lorem_bytes_l()
         fname = pathlib.Path(self.tmpdir, 'lorem4.gz')
         test_multiline_deflate_aux(self,
-                                   ioclass=zstream.BufferedZstream,
+                                   ioclass=zstream.TextZstream,
                                    text_l=text_l,
                                    fname=fname)
 
@@ -52,7 +52,6 @@ class Test_TextZstream(unittest.TestCase):
         text = get_lorem_str()
         fname = pathlib.Path(self.tmpdir, 'read.gz')
         test_read_aux(self,
-                      ioclass=zstream.BufferedZstream,
+                      ioclass=zstream.TextZstream,
                       text=text,
                       fname=fname)
-        
