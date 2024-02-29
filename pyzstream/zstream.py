@@ -97,7 +97,8 @@ class ZstreamBase(io.IOBase):
     def readline(self, z = -1):
         return self._zstream.readline(z)
 
-    # def readlines(self, hint = -1):    # TODO
+    def readlines(self, hint = -1):
+        return self._zstream.readlines(hint)
 
     def writelines(self, l):
         for s in l:
