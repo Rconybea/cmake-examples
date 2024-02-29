@@ -106,12 +106,16 @@ class Test_zstream(unittest.TestCase):
         s = 'hello, world!\n'
         n = zs.write(s)
 
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
         self.assertEqual(n, len(s))
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), n)
 
         zs.close()
 
+        self.assertEqual(zs.is_open(), False)
+        self.assertEqual(zs.is_closed(), True)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
 
