@@ -65,14 +65,13 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
+        self.assertTrue(zs.native_handle() >= 0)
 
         zs.close()
 
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
-
-        self.assertEqual(zs.tellg(), 0)
-        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.native_handle(), -1)
 
         # expect file empty.gz with just zlib header (20 bytes)
         with subprocess.Popen(["gunzip", "-c", "empty.gz"], shell=False, stdout=subprocess.PIPE) as subp:
@@ -103,6 +102,7 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
+        self.assertTrue(zs.native_handle() >= 0)
 
         s = 'hello, world!\n'
         n = zs.write(s)
@@ -110,11 +110,13 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(n, len(s))
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), n)
+        self.assertTrue(zs.native_handle() >= 0)
 
         zs.close()
 
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.native_handle(), -1)
 
         # expect file hello.gz containing 'hello, world\n' (34 bytes 'compressed')
         with subprocess.Popen(["gunzip", "-c", "hello.gz"], shell=False, stdout=subprocess.PIPE) as subp:
@@ -161,13 +163,17 @@ class Test_zstream(unittest.TestCase):
 
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.native_handle(), -1)
+
         # reopen stream,  this time for reading
 
         zs = pyzstream.zstream(16384,
                                "hello.gz",
                                openmode.input)
+
         # zs.open('hello.gz', openmode.input)
         self.assertEqual(zs.openmode(), openmode.input)
+        self.assertTrue(zs.native_handle() >= 0)
         self.assertEqual(zs.is_readable(), True)
         self.assertEqual(zs.is_writable(), False)
         self.assertEqual(zs.is_open(), True)
@@ -187,5 +193,8 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.gcount(), n)
         self.assertEqual(zs.tellg(), -1)
         self.assertEqual(zs.tellp(), -1)
+        self.assertTrue(zs.native_handle() >= 0)
 
         zs.close()
+
+        self.assertEqual(zs.native_handle(), -1)
