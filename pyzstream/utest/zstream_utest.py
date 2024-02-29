@@ -187,7 +187,8 @@ class Test_zstream(unittest.TestCase):
 
         # Note: zs.read() would set failbit since <32 chars available
         s2 = zs.get(32, '\0')
-        #s2=zs.readline()
+        #s2 = zs.get(32, '\0')
+        s2=zs.readline()
 
         self.assertEqual(s2, s)
         self.assertEqual(zs.eof(), True)
@@ -200,3 +201,33 @@ class Test_zstream(unittest.TestCase):
         zs.close()
 
         self.assertEqual(zs.native_handle(), -1)
+        self.assertEqual(s2, s)
+
+        self.assertEqual(zs.gcount(), n)
+        self.assertEqual(zs.tellg(), -1)
+        self.assertEqual(zs.tellp(), -1)
+        #self.assertEqual(zs.tellg(), n)
+        #self.assertEqual(zs.tellp(), 0)
+
+        self.assertEqual(zs.openmode(), openmode.input)
+        self.assertEqual(zs.is_readable(), True)
+        self.assertEqual(zs.is_writable(), False)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), n)
+        self.assertEqual(zs.tellp(), 0)
+
+        s2=zs.readline()
+
+        self.assertEqual(s2, '')
+        self.assertEqual(zs.eof(), True)
+        self.assertTrue(zs.native_handle() >= 0)
+
+        zs.close()
+
+        self.assertEqual(zs.is_open(), False)
+        self.assertEqual(zs.is_closed(), True)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.native_handle(), -1)
+
