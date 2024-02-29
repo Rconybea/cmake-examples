@@ -210,6 +210,30 @@ PYBIND11_MODULE(pyzstream, m) {
              py::doc("Read z characters from stream.\n"
                      "Return string containing the characters read.\n"
                      "Set both fail and eof bits if less than z characters are available.\n"))
+        .def("readline",
+             [](zstream & zs, std::streamsize z)
+                 {
+                     string retval;
+
+                     if (z >= 0) {
+                         retval.resize(z);
+
+                         std::streamsize n = zs.read_until(retval.data(),
+                                                           z,
+                                                           true /*check_delim_flag*/,
+                                                           '\n' /*delim*/);
+
+                         retval.resize(n+1);
+                     } else {
+                         retval = zs.read_until(true /*check_delim_flag*/,
+                                                '\n' /*delim*/);
+                     }
+
+                     return retval;
+                 },
+             py::arg("z") = -1,
+             py::doc("Read one line of (uncompressed) text;"
+                     " or if z>=0, up to z characters or newline, whichever comes first."))
         .def("get",
              [](zstream & zs, std::streamsize z, char delim)
                  {
