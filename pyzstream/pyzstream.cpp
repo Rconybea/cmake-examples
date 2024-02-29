@@ -201,7 +201,6 @@ PYBIND11_MODULE(pyzstream, m) {
                          if (z >= 0) {
                              retval.resize(z);
 
-                             /* read expects signed char */
                              zs.read(retval.data(), z);
                              std::streamsize n_read = zs.gcount();
 
@@ -278,18 +277,6 @@ PYBIND11_MODULE(pyzstream, m) {
                      PyBuffer_Release(&buffer_details);
 
                      return (p1 - p0);
-
-#ifdef OBSOLETE
-                     char * buf_data = PyByteArray_AS_STRING(buf.ptr());
-                     size_t buf_z = buf.size();
-
-                     if (buf_data && (buf_z > 0)) {
-                         zs.read(buf_data, buf_z);
-                         return zs.gcount();
-                     } else {
-                         return 0;
-                     }
-#endif
                  },
              py::arg("buf"),
              py::doc("Read into writable python bytes-like object."))
