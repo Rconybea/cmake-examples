@@ -167,11 +167,8 @@ class Test_zstream(unittest.TestCase):
 
         # reopen stream,  this time for reading
 
-        zs = pyzstream.zstream(16384,
-                               "hello.gz",
-                               openmode.input)
+        zs.open('hello.gz', openmode.input)
 
-        # zs.open('hello.gz', openmode.input)
         self.assertEqual(zs.openmode(), openmode.input)
         self.assertTrue(zs.native_handle() >= 0)
         self.assertEqual(zs.is_readable(), True)
