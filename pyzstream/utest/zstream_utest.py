@@ -239,24 +239,22 @@ class Test_zstream(unittest.TestCase):
                                "multiline.gz",
                                openmode.output)
 
-        s = """
-Lorem ipsum dolor sit amet, consectetur adipiscing elit
-, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua
-. Nulla pharetra diam sit amet nisl. Non arcu risus quis varius
-. Amet risus nullam eget felis eget nunc lobortis mattis
-. Maecenas accumsan lacus vel facilisis volutpat
-. At lectus urna duis convallis
-. Arcu felis bibendum ut tristique et egestas quis
-. Amet massa vitae tortor condimentum lacinia quis vel
-. Auctor eu augue ut lectus arcu bibendum
-. Sit amet nulla facilisi morbi tempus iaculis urna
-. Netus et malesuada fames ac turpis egestas integer
-. Suspendisse interdum consectetur libero id faucibus nisl
-. Nunc consequat interdum varius sit amet mattis
-. Orci porta non pulvinar neque laoreet suspendisse
-. Adipiscing commodo elit at imperdiet dui
-
-        """
+        s = """Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+Nulla pharetra diam sit amet nisl. Non arcu risus quis varius.
+Amet risus nullam eget felis eget nunc lobortis mattis.
+Maecenas accumsan lacus vel facilisis volutpat.
+At lectus urna duis convallis.
+Arcu felis bibendum ut tristique et egestas quis.
+Amet massa vitae tortor condimentum lacinia quis vel.
+Auctor eu augue ut lectus arcu bibendum.
+Sit amet nulla facilisi morbi tempus iaculis urna.
+Netus et malesuada fames ac turpis egestas integer.
+Suspendisse interdum consectetur libero id faucibus nisl.
+Nunc consequat interdum varius sit amet mattis.
+Orci porta non pulvinar neque laoreet suspendisse.
+Adipiscing commodo elit at imperdiet dui.
+"""
 
         n = zs.write(s)
         zs.close()
@@ -267,8 +265,8 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit
 
         l = zs.readlines()
 
-        self.assertEqual(len(l), s.count('\n') + 1)
+        self.assertEqual(len(l), 15)
+        self.assertEqual(len(l), s.count('\n'))
         self.assertEqual(''.join(l), s)
 
         #print("l={l}".format(l=l))
-

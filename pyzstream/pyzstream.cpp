@@ -252,7 +252,6 @@ PYBIND11_MODULE(pyzstream, m) {
              py::doc("Read up to z characters from stream,\n"
                      " but stop on first occurence of delim.\n"
                      "Sets eof bit (but not fail bit) if less than z characters are available.\n"))
-        .def("write",
         .def("readlines",
              [](zstream & zs, std::streamsize hint = -1)
                  {
@@ -280,16 +279,7 @@ PYBIND11_MODULE(pyzstream, m) {
              py::arg("hint") = -1,
              py::doc("Read stream content (uncompressing), splitting into lines on each newline.\n"
                      "If hint >= 0,  stop once total number of chars read reaches hint.\n"))
-             [](zstream & zs, std::string const & x)
-                 {
-                     zstream::pos_type p0 = zs.tellp();
-
-                     zs.write(x.data(), x.size());
-
-                     zstream::pos_type p1 = zs.tellp();
-
-                     /* cannot return this,  because don't know address of unique python wrapper object */
-        .def("write_safe2",
+        .def("write",
              [](zstream & zs, std::string const & x)
                  {
                      zstream::pos_type p0 = zs.tellp();
@@ -300,7 +290,9 @@ PYBIND11_MODULE(pyzstream, m) {
 
                      /* note: couldn't return 'this' here, b/c don't know address of unique python wrapper object */
                      return (p1 - p0);
-                  })
+                 },
+             py::arg("x"),
+             py::doc("Write string x to this zstream"))
         .def("sync",
              &zstream::sync,
              py::doc("Sync stream state with filesystem (i.e. flush output)."))
