@@ -289,9 +289,18 @@ PYBIND11_MODULE(pyzstream, m) {
                      zstream::pos_type p1 = zs.tellp();
 
                      /* cannot return this,  because don't know address of unique python wrapper object */
+        .def("write_safe2",
+             [](zstream & zs, std::string const & x)
+                 {
+                     zstream::pos_type p0 = zs.tellp();
 
+                     zs.write(x.data(), x.size());
+
+                     zstream::pos_type p1 = zs.tellp();
+
+                     /* note: couldn't return 'this' here, b/c don't know address of unique python wrapper object */
                      return (p1 - p0);
-                 })
+                  })
         .def("sync",
              &zstream::sync,
              py::doc("Sync stream state with filesystem (i.e. flush output)."))
