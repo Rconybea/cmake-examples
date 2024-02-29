@@ -213,6 +213,76 @@ public:
             native_fd_ = fd;
         }
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+    /* read until n chars or delim reached,  whichever comes first
+     * if this returns 0,  have reached eof
+     */
+    std::streamsize read_until(char_type * s,
+                               std::streamsize n,
+                               bool check_delim_flag,
+                               char_type delim) {
+        /*
+         * r = content that's been read already
+         * X = content that's available to be read
+         *
+         *     rrrrrrrrrrXXXXXXXXXXXXX
+         *     ^         ^            ^
+         *     .eback    .gptr        .egptr
+         */
+
+        char_type * p = s;
+
+        char_type * gptr = this->gptr();
+        char_type * egptr = this->egptr();
+
+        std::streamsize i = 0;
+
+        for (; i < n; ++i) {
+            if (gptr == egptr) {
+                this->underflow();
+                gptr = this->gptr();
+                egptr = this->egptr();
+
+                if (gptr == egptr) {
+                    /* exhausted input */
+                    break;
+                }
+            }
+
+            *p = *gptr;
+
+            if (check_delim_flag && (*p == delim)) {
+                this->setg(this->eback(), gptr+1, egptr);
+
+                /* include delimiter in count */
+                ++i;
+
+                return i;
+            }
+
+            ++p;
+            ++gptr;
+        }
+
+        if (i > 0) {
+            this->setg(this->eback() /*preserving .eback*/,
+                       gptr,
+                       egptr);
+        }
+
+        //std::cerr << "zstreambuf::read_until: s=" << std::string_view(s, s + std::min(n, i)) << std::endl;
+
+        return i;
+    }
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
+
+>>>>>>> Stashed changes
     /* Given that there will be no more uncompressed output,
      * commit remaining compressed portion to output stream.
      *
@@ -432,7 +502,7 @@ protected:
      * 0 on success, -1 on failure
      *
      * NOTE: After .sync() returns may still have un-synced output in .output_zs;
-     *       tradeoff is that if we insist on writing that output,  will change the contents
+     *       tradeoff here is that if we insist on writing that output,  will change the contents
      *       of comppressed output + degrade compression quality.
      */
     virtual int

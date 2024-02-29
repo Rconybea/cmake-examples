@@ -354,3 +354,57 @@ TEST_CASE("zstream-filebuf-reopen", "[zstream]") {
         ::remove(fname.c_str());
     }
 }
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+
+TEST_CASE("zstream-filebuf-readuntil", "[zstream]") {
+    zstream zs_out(16384 /*buf_z*/);
+
+    for (size_t i_tc = 0; i_tc < s_testcase_v.size(); ++i_tc) {
+        TestCase const & tc = s_testcase_v[i_tc];
+
+        std::string fname = tostr("test", i_tc, ".gz");
+
+        INFO(tostr("i_tc=", i_tc, ", fname=", fname));
+
+        // create file of compressed text
+        INFO(tostr("writing to fname=", fname));
+        {
+            zstream zs(tc.buf_z_, fname.c_str(), ios::out);
+
+            zs.write(Text::s_text, strlen(Text::s_text));
+            zs.close();
+        }
+
+        // exercise readuntil, using artificially small block size
+        {
+            zstream zs(tc.buf_z_, fname.c_str(), ios::in);
+
+            /* index position relative to start of stream */
+            size_t i_zs = 0;
+
+            while (!zs.eof()) {
+                INFO(tostr("i_zs=", i_zs));
+
+                string s = zs.read_until(true /*check_delim*/, '\n', 8 /*block_z*/);
+
+                if (!zs.eof())
+                    CHECK(s.size() > 0);
+
+                /* expect s to have exactly one \n,  at the end */
+                for (size_t i=0, n=s.size(); i+1<n; ++i)
+                    CHECK(s[i] != '\n');
+
+                if (!zs.eof() && (s.size() > 0))
+                    CHECK(s[s.size() - 1] == '\n');
+
+                i_zs += s.size();
+            }
+        }
+    }
+}
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes

@@ -144,6 +144,78 @@ public:
             this->rdbuf_.open(filename, mode);
         }
 
+<<<<<<< Updated upstream
+=======
+    /* read into s[0]..s[n-1] up to n chars, or until and including delim, whichever comes first */
+    std::streamsize read_until(char_type * s,
+                               std::streamsize n,
+                               bool check_delim_flag,
+                               char_type delim)
+        {
+            if (n <= 0)
+                return 0;
+
+            std::streamsize retval = this->rdbuf_.read_until(s, n,
+                                                             check_delim_flag, delim);
+
+            if (retval == 0)
+                this->setstate(std::ios_base::eofbit);
+
+            return retval;
+        }
+
+    /* read line up to delim,  report as string.
+     * consumes memory for string in multiples of block_z.
+     */
+    std::string read_until(bool check_delim_flag,
+                           char_type delim,
+                           uint32_t block_z = 4095) {
+        /* list of complete blocks read;  each string in this list has block_z chars */
+        std::list<std::string> block_l;
+
+        /* index# of next block to read */
+        uint32_t i_block = 0;
+
+        /* last block read.   0..block_z chars */
+        std::string last_block;
+
+        for (;; ++i_block) {
+            last_block = std::string();
+            last_block.resize(block_z + 1);
+
+            std::streamsize n = this->read_until(last_block.data(), block_z, check_delim_flag, delim);
+
+            if ((n < block_z)
+                || ((n == block_z) && check_delim_flag && (last_block[block_z - 1] == delim))) {
+
+                last_block.resize(n);
+                break;
+            }
+
+            block_l.push_back(last_block);
+        }
+
+        /* final result is concatenation of strings in block_l, followed by last_block */
+
+        std::string retval;
+
+        retval.resize((block_l.size() * block_z) + last_block.size());
+
+        i_block = 0;
+        for (std::string const & s : block_l) {
+            std::copy(s.data(),
+                      s.data() + s.size(),
+                      retval.data() + (i_block * block_z));
+            ++i_block;
+        }
+
+        std::copy(last_block.data(),
+                  last_block.data() + last_block.size(),
+                  retval.data() + block_l.size() * block_z);
+
+        return retval;
+    }
+>>>>>>> Stashed changes
 
     /* move-assignment */
     basic_zstream & operator=(basic_zstream && x) {
