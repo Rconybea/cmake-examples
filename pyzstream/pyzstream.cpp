@@ -191,25 +191,92 @@ PYBIND11_MODULE(pyzstream, m) {
         .def("peek",
              [](zstream & zs) -> char { return zs.peek();  },
              py::doc("Return next input character,  without extracting it"))
-        .def("read",
+        .def("readsafe",   // merge will clobber .read()
              [](zstream & zs, std::streamsize z)
                  {
-                     /* here we assume we should think of input as being in text mode */
-                     std::string retval;
-                     retval.resize(z);
+                      /* here we assume we should think of input as being in text mode */
+                      std::string retval;
 
-                     /* read into buffer */
-                     zs.read(retval.data(), z);
+                      /* read into buffer */
+                      zs.read(retval.data(), z);
 
-                     std::streamsize n_read = zs.gcount();
+                      std::streamsize n_read = zs.gcount();
 
-                     retval.resize(n_read);
+                      retval.resize(n_read);
 
-                     return retval;
+                      return retval;
                  },
+             py::arg("z") = -1,
              py::doc("Read z characters from stream.\n"
                      "Return string containing the characters read.\n"
-                     "Set both fail and eof bits if less than z characters are available.\n"))
+            )
+        .def("read",
+             [](zstream & zs, std::streamsize z) -> py::object
+                 {
+                     if (zs.is_binary()) {
+                         /* for binary stream,  return py::bytes object */
+                         vector<char> retval;
+
+                         if (z >= 0) {
+                             retval.resize(z);
+
+                             /* read expects signed char */
+                             zs.read(retval.data(), z);
+                             std::streamsize n_read = zs.gcount();
+
+                             retval.resize(n_read);
+                         } else {
+                             size_t block_z = 4096;
+
+                             for (size_t i_loop = 0; ; ++i_loop) {
+                                 vector<char> block;
+                                 /* c_block_z: arbitrary guess at size required for remainder of input */
+                                 block.resize(block_z);
+
+                                 zs.read(block.data(), block_z);
+                                 size_t n_read = zs.gcount();
+
+                                 block.resize(n_read);
+
+                                 if (i_loop > 0)
+                                     retval.insert(retval.end(), block.begin(), block.end());
+                                 else
+                                     retval = std::move(block);
+
+                                 if (n_read < block_z)
+                                     break;
+
+                                 /* use a bigger block size for next iteration */
+                                 block_z *= 2;
+                             }
+                         }
+
+                         return py::bytes(retval.data(), retval.size());
+                     } else {
+                         /* for text stream,  return string object */
+
+                         if (z >= 0) {
+                             std::string retval;
+                             retval.resize(z);
+
+                             /* read into buffer */
+                             zs.read(retval.data(), z);
+
+                             std::streamsize n_read = zs.gcount();
+
+                             retval.resize(n_read);
+                             return py::str(retval.data());
+                         } else /* read entire stream into string */ {
+                             return py::str(zs.read_until(false /*!check_delim_flag*/,
+                                                          '\0' /*delim -- ignored*/).data());
+                         }
+                     }
+                 },
+             py::arg("z") = -1,
+             py::doc("Read up to z uncompressed bytes from this stream.\n"
+                     "If -1, read and report entire stream contents.\n"
+                     "Returns string for text stream;  bytes for a binary stream.\n")
+            )
         .def("readinto",
              [](zstream & zs, py::object const & x) -> int64_t
                  {

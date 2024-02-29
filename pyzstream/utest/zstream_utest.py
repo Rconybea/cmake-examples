@@ -313,6 +313,37 @@ Adipiscing commodo elit at imperdiet dui.
         self.assertEqual(zs.tellg(), -1)
         self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+
+        # reopen stream, this time for reading
+
+        zs = pyzstream.zstream(16384,
+                               "binary.gz",
+                               openmode.input | openmode.binary)
+
+        self.assertEqual(zs.openmode(), openmode.input | openmode.binary)
+        self.assertEqual(zs.is_readable(), True)
+        self.assertEqual(zs.is_writable(), False)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
+        self.assertTrue(zs.native_handle() >= 0)
+
+        # since stream contains nothing but serialized array,
+        # reading the entire stream recovers byte representatino for that array
+        #
+        b = zs.read()
+
+        self.assertEqual(len(b), n)
+
+        a2 = array.array('i')
+        a2.frombytes(b)
+>>>>>>> Stashed changes
 
         #a2 = array.array('i')
         #a2.frombytes(b)
