@@ -37,9 +37,9 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.is_writable(), False)
         self.assertEqual(zs.is_open(), False)
         self.assertEqual(zs.is_closed(), True)
-        self.assertEqual(zs.eof(), False)
-        self.assertEqual(zs.tellg(), 0)
-        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.eof(), True)
+        self.assertEqual(zs.tellg(), -1)
+        self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
 
         return
@@ -69,8 +69,8 @@ class Test_zstream(unittest.TestCase):
 
         zs.close()
 
-        self.assertEqual(zs.tellg(), 0)
-        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.tellg(), -1)
+        self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
 
         # expect file empty.gz with just zlib header (20 bytes)
@@ -118,8 +118,8 @@ class Test_zstream(unittest.TestCase):
 
         self.assertEqual(zs.is_open(), False)
         self.assertEqual(zs.is_closed(), True)
-        self.assertEqual(zs.tellg(), 0)
-        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.tellg(), -1)
+        self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
 
         # expect file hello.gz containing 'hello, world\n' (34 bytes 'compressed')
@@ -165,8 +165,8 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.is_open(), False)
         self.assertEqual(zs.is_closed(), True)
 
-        self.assertEqual(zs.tellg(), 0)
-        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.tellg(), -1)
+        self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
 
         # reopen stream,  this time for reading
@@ -186,16 +186,18 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.tellp(), 0)
 
         # Note: zs.read() would set failbit since <32 chars available
-        s2 = zs.get(32, '\0')
         #s2 = zs.get(32, '\0')
         s2=zs.readline()
 
+        # although we're at eof,  we won't find out until next attempt to read.
+
         self.assertEqual(s2, s)
-        self.assertEqual(zs.eof(), True)
+        self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.fail(), False)
+        # zs.gcount() won't include final newline.
         self.assertEqual(zs.gcount(), n)
-        self.assertEqual(zs.tellg(), -1)
-        self.assertEqual(zs.tellp(), -1)
+        self.assertEqual(zs.tellg(), n)
+        self.assertEqual(zs.tellp(), 0)
         self.assertTrue(zs.native_handle() >= 0)
 
         zs.close()
@@ -206,8 +208,6 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.gcount(), n)
         self.assertEqual(zs.tellg(), -1)
         self.assertEqual(zs.tellp(), -1)
-        #self.assertEqual(zs.tellg(), n)
-        #self.assertEqual(zs.tellp(), 0)
 
         self.assertEqual(zs.openmode(), openmode.input)
         self.assertEqual(zs.is_readable(), True)
@@ -231,4 +231,3 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.is_closed(), True)
         self.assertEqual(zs.eof(), True)
         self.assertEqual(zs.native_handle(), -1)
-

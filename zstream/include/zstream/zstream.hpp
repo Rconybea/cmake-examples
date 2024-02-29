@@ -69,7 +69,10 @@ public:
                  nullptr /*native_sbuf*/,
                  mode),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
-        {}
+        {
+            /* closed state = empty stream -> eof */
+            this->setstate(std::ios_base::eofbit);
+        }
 
     basic_zstream(std::streamsize buf_z,
                   std::unique_ptr<std::streambuf> native_sbuf,
@@ -79,12 +82,13 @@ public:
                  std::move(native_sbuf),
                  mode),
           std::basic_iostream<CharT, Traits>(&rdbuf_)
-           {}
+        {}
+
     /* convenience ctor;  apply default buffer size */
     basic_zstream(std::unique_ptr<std::streambuf> native_sbuf,
                   std::ios::openmode mode)
         : basic_zstream(c_default_buffer_size,
-                        c_empty_native_handle /*native_fd*/,
+                        c_empty_native_handle /*native_fd (n/a or unknown)*/,
                         std::move(native_sbuf),
                         mode)
         {}
@@ -110,7 +114,16 @@ public:
                 if (p->open(filename, std::ios::binary | mode)) {
                     this->rdbuf_.adopt_native_sbuf(std::move(p),
                                                    p->native_handle());
+                } else {
+                    /* open failed: want failbit set */
+                    this->setstate(std::ios_base::failbit);
                 }
+            } else {
+                /* no filename or empty filename:
+                 * 1. do not create native sbuf
+                 * 2. stream in eof state
+                 */
+                this->setstate(std::ios_base::eofbit);
             }
         }
 
@@ -194,12 +207,14 @@ public:
                         }
 
                         if (nr < n-1) {
-                            /* go directly to .rdbuf to ignore fmtflags
-                             *
-                             */
+                            /* go directly to .rdbuf to ignore fmtflags. */
+
                             int_type nextc = this->rdbuf_.sgetc();
 
                             if (nextc == Traits::to_int_type(delim)) {
+                                /* include delimiter in result */
+
+                                ++(this->_M_gcount);
                                 this->rdbuf_.sbumpc();
 
                                 /* include delim in s[] */
@@ -329,8 +344,8 @@ public:
     void close() {
         this->rdbuf_.close();
 
-        /* clear state bits:  in particular need to clear any of {eofbit, failbit, badbit} */
-        this->clear();
+        /* clear state bits:  in particular need to clear any of {failbit, badbit} */
+        this->clear(std::ios::eofbit);
     }
 
 #  ifndef NDEBUG

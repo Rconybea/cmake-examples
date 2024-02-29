@@ -433,6 +433,10 @@ protected:
 
         std::streambuf * nsbuf = native_sbuf_.get();
 
+        if (!nsbuf) {
+            throw std::runtime_error("basic_zstreambuf::underflow: attempt to read from closed stream");
+        }
+
         /* read position associated with start of buffer needs to include
          * buffer extent that we're about to replace
          */
