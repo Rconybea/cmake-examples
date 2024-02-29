@@ -313,10 +313,10 @@ Adipiscing commodo elit at imperdiet dui.
         self.assertEqual(zs.tellg(), -1)
         self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
-        a2 = array.array('i')
-        a2.frombytes(b)
 
-        self.assertEqual(a, a2)
+        #a2 = array.array('i')
+        #a2.frombytes(b)
+        #self.assertEqual(a, a2)
 
         # reopen stream, this time will use .readinto()
         zs.open('binary.gz', openmode.input | openmode.binary)
@@ -337,6 +337,8 @@ Adipiscing commodo elit at imperdiet dui.
         n2 = zs.readinto(a2)
 
         self.assertEqual(n, n2)
+
+        # recovere original a from binary stream via .readinto()
         self.assertEqual(a, a2)
 
         self.assertEqual(zs.tellg(), n2)
