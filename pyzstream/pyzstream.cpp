@@ -191,25 +191,6 @@ PYBIND11_MODULE(pyzstream, m) {
         .def("peek",
              [](zstream & zs) -> char { return zs.peek();  },
              py::doc("Return next input character,  without extracting it"))
-        .def("readsafe",   // merge will clobber .read()
-             [](zstream & zs, std::streamsize z)
-                 {
-                      /* here we assume we should think of input as being in text mode */
-                      std::string retval;
-
-                      /* read into buffer */
-                      zs.read(retval.data(), z);
-
-                      std::streamsize n_read = zs.gcount();
-
-                      retval.resize(n_read);
-
-                      return retval;
-                 },
-             py::arg("z") = -1,
-             py::doc("Read z characters from stream.\n"
-                     "Return string containing the characters read.\n")
-            )
         .def("read",
              [](zstream & zs, std::streamsize z) -> py::object
                  {
