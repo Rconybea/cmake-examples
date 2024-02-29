@@ -145,39 +145,87 @@ public:
             this->rdbuf_.open(filename, mode);
         }
 
-    /* read into s[0]..s[n-1] until either:
-     * 1. s[] is full
+    /* read upto n-1 chars into s[0]..s[n-2] until either:
+     * 1. s[] is full (has n-1 chars)
      * 2. check_delim_flag is true and reached character delim.
      *    In this case behavior is equivalent to .get(s, n, delim),
      *    except that .read_until() returns the #of characters read,
-     *    insteead of *this.
+     *    instead of *this;
+     * In any case, if read_until returns nr, then s[nr-1] is null (char_type())
+     * Return value is #of chars in s[], excluding null.
      *
      * We need .read_until() as building block for overload that does not require caller
      * to supply buffer size.
+     *
+     * requires noskipws
      */
     std::streamsize read_until(char_type * s,
                                std::streamsize n,
                                bool check_delim_flag,
                                char_type delim)
         {
-            if (check_delim_flag) {
-                this->get(s, n, delim);
-                std::streamsize nr = this->gcount();
-
-                return nr;
-            }
-
+            using sentry_type = typename std::basic_istream<CharT, Traits>::sentry;
 
             if (n <= 0)
                 return 0;
 
-            std::streamsize retval = this->rdbuf_.read_until(s, n,
-                                                             check_delim_flag, delim);
+            sentry_type sentry(*this, true /*noskipws*/);
 
-            if (retval == 0)
-                this->setstate(std::ios_base::eofbit);
+            std::streamsize nr = 0;
 
-            return retval;
+            if (sentry) {
+                try {
+                    if (check_delim_flag) {
+                        /* notes on istream.get():
+                         * 1. sets failbit if delim is first character in stream (!!)
+                         * 2. mandates trailing null s[n-1], so only reads n-1 chars
+                         * 3. excludes trailing delim.
+                         *    We want to include it (since python requires it)
+                         */
+
+                        int_type nextc = this->rdbuf_.sgetc();
+
+                        if (nextc == Traits::to_int_type(delim)) {
+                            nr = 0;
+                        } else {
+                            this->get(s, n, delim);
+
+                            nr = this->gcount();
+                        }
+
+                        if (nr < n-1) {
+                            /* go directly to .rdbuf to ignore fmtflags */
+                            int_type nextc = this->rdbuf_.sgetc();
+
+                            if (nextc == Traits::to_int_type(delim)) {
+                                this->rdbuf_.sbumpc();
+
+                                /* include delim in s[] */
+                                s[nr]   = delim;
+                                s[nr+1] = char_type();
+                                nr = nr+1;
+                            } else if (nextc == Traits::eof()) {
+                                /* eof != delim -> nothing to do here */
+                            }
+                        }
+                    } else /*!check_delim_flag*/ {
+                        /* for consistency with the delim case, only fetch n-1 chars and null-terminate */
+
+                        nr = this->rdbuf_.sgetn(s, n-1);
+
+                        if (nr < n-1)
+                            this->setstate(std::ios_base::eofbit);
+                    }
+                } catch(__cxxabiv1::__forced_unwind & x) {
+                    this->setstate(std::ios::failbit);
+                    throw;
+                } catch(...) {
+                    /* swallow i/o exceptions (except forced unwind) encountered while reading */
+                    this->setstate(std::ios::failbit);
+                }
+            }
+
+            return nr;
         }
 
     /* if check_delim_flag is true: read up to first occurence of delim
@@ -191,6 +239,14 @@ public:
                            char_type delim,
                            uint32_t block_z = 4095)
         {
+            if (block_z == 0) {
+                /* heuristic:
+                 * - approx size of 1 disk page
+                 * - less 1 byte (in case string allocs 1 byte extra for null)
+                 */
+                block_z = 4095;
+            }
+
             /* list of complete blocks read;  each string in this list has block_z chars */
             std::list<std::string> block_l;
 
@@ -204,21 +260,20 @@ public:
                 last_block = std::string();
                 last_block.resize(block_z + 1);
 
-                std::streamsize n = this->read_until(last_block.data(), block_z, check_delim_flag, delim);
+                /* reminder: .read_until() helper actually only reads block_z chars */
+                std::streamsize n = this->read_until(last_block.data(), block_z + 1, check_delim_flag, delim);
 
-                if ((n < block_z)
-                    || ((n == block_z) && check_delim_flag && (last_block[block_z - 1] == delim))) {
+                last_block.resize(n);
 
-                    last_block.resize(n);
+                if (n < block_z)
                     break;
-                }
 
                 block_l.push_back(last_block);
             }
 
             /* final result is concatenation of:
-             *   - strings in block_l
-             *   - followed by last_block
+             *   - strings collected in block_l (each string of length block_z)
+             *   - leftover string in last_block
              */
 
             std::string retval;
@@ -241,7 +296,7 @@ public:
 
             std::copy(last_block.data(),
                       last_block.data() + last_block.size(),
-                      retval.data() + block_l.size() * block_z);
+                      retval.data() + (i_block * block_z));
 
             return retval;
         }

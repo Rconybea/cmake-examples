@@ -213,6 +213,7 @@ public:
             native_fd_ = fd;
         }
 
+#ifdef NOT_USING_AFTER_ALL
     /* read until n chars or delim reached,  whichever comes first
      * if this returns 0,  have reached eof
      */
@@ -273,6 +274,7 @@ public:
 
         return i;
     }
+#endif
 
     /* Given that there will be no more uncompressed output,
      * commit remaining compressed portion to output stream.

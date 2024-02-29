@@ -374,7 +374,7 @@ TEST_CASE("zstream-filebuf-readuntil", "[zstream]") {
             zs.close();
         }
 
-        // exercise readuntil, using artificially small block size
+        // exercise zstream.read_until(), using artificially small block size
         {
             zstream zs(tc.buf_z_, fname.c_str(), ios::in);
 
@@ -384,14 +384,21 @@ TEST_CASE("zstream-filebuf-readuntil", "[zstream]") {
             while (!zs.eof()) {
                 INFO(tostr("i_zs=", i_zs));
 
-                string s = zs.read_until(true /*check_delim*/, '\n', 8 /*block_z*/);
+                string s = zs.read_until(true /*check_delim*/, '\n', 32 /*block_z*/);
 
-                if (!zs.eof())
-                    CHECK(s.size() > 0);
+                INFO(tostr("i_zs=", i_zs, ", s.size=", s.size(), ", s=[", s, "]"));
+
+                //std::cerr << "Fails if first character is supposed to be delimiter" << std::endl;
+
+                if (!zs.eof()) {
+                    REQUIRE(s.size() > 0);
+                }
 
                 /* expect s to have exactly one \n,  at the end */
-                for (size_t i=0, n=s.size(); i+1<n; ++i)
+                for (size_t i=0, n=s.size(); i+1<n; ++i) {
+                    INFO(tostr("i_ck=", i, " s[i_ck]=[", s[i], "]"));
                     CHECK(s[i] != '\n');
+                }
 
                 if (!zs.eof() && (s.size() > 0))
                     CHECK(s[s.size() - 1] == '\n');
