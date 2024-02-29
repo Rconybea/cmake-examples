@@ -213,12 +213,6 @@ public:
             native_fd_ = fd;
         }
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
     /* read until n chars or delim reached,  whichever comes first
      * if this returns 0,  have reached eof
      */
@@ -279,10 +273,7 @@ public:
 
         return i;
     }
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
->>>>>>> Stashed changes
     /* Given that there will be no more uncompressed output,
      * commit remaining compressed portion to output stream.
      *

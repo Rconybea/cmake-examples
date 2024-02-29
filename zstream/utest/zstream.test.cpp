@@ -354,10 +354,6 @@ TEST_CASE("zstream-filebuf-reopen", "[zstream]") {
         ::remove(fname.c_str());
     }
 }
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
 
 TEST_CASE("zstream-filebuf-readuntil", "[zstream]") {
     zstream zs_out(16384 /*buf_z*/);
@@ -405,6 +401,3 @@ TEST_CASE("zstream-filebuf-readuntil", "[zstream]") {
         }
     }
 }
->>>>>>> Stashed changes
->>>>>>> Stashed changes
->>>>>>> Stashed changes

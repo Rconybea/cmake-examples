@@ -5,6 +5,7 @@
 #include "zstreambuf.hpp"
 #include <iostream>
 #include <fstream>
+#include <list>
 
 /* note: We want to allow out-of-memory-order initialization here.
  *       1. We (presumably) must initialize .rdbuf before passing it to basic_iostream's ctor
@@ -144,14 +145,29 @@ public:
             this->rdbuf_.open(filename, mode);
         }
 
-<<<<<<< Updated upstream
-=======
-    /* read into s[0]..s[n-1] up to n chars, or until and including delim, whichever comes first */
+    /* read into s[0]..s[n-1] until either:
+     * 1. s[] is full
+     * 2. check_delim_flag is true and reached character delim.
+     *    In this case behavior is equivalent to .get(s, n, delim),
+     *    except that .read_until() returns the #of characters read,
+     *    insteead of *this.
+     *
+     * We need .read_until() as building block for overload that does not require caller
+     * to supply buffer size.
+     */
     std::streamsize read_until(char_type * s,
                                std::streamsize n,
                                bool check_delim_flag,
                                char_type delim)
         {
+            if (check_delim_flag) {
+                this->get(s, n, delim);
+                std::streamsize nr = this->gcount();
+
+                return nr;
+            }
+
+
             if (n <= 0)
                 return 0;
 
@@ -164,58 +180,71 @@ public:
             return retval;
         }
 
-    /* read line up to delim,  report as string.
-     * consumes memory for string in multiples of block_z.
+    /* if check_delim_flag is true: read up to first occurence of delim
+     * otherwise:  read up to eof.
+     *
+     * Implementation is O(n) for return value of length n
+     *
+     * Allocates pages for input in units of block_z
      */
     std::string read_until(bool check_delim_flag,
                            char_type delim,
-                           uint32_t block_z = 4095) {
-        /* list of complete blocks read;  each string in this list has block_z chars */
-        std::list<std::string> block_l;
+                           uint32_t block_z = 4095)
+        {
+            /* list of complete blocks read;  each string in this list has block_z chars */
+            std::list<std::string> block_l;
 
-        /* index# of next block to read */
-        uint32_t i_block = 0;
+            /* index# of next block to read */
+            uint32_t i_block = 0;
 
-        /* last block read.   0..block_z chars */
-        std::string last_block;
+            /* last block read.   0..block_z chars */
+            std::string last_block;
 
-        for (;; ++i_block) {
-            last_block = std::string();
-            last_block.resize(block_z + 1);
+            for (;; ++i_block) {
+                last_block = std::string();
+                last_block.resize(block_z + 1);
 
-            std::streamsize n = this->read_until(last_block.data(), block_z, check_delim_flag, delim);
+                std::streamsize n = this->read_until(last_block.data(), block_z, check_delim_flag, delim);
 
-            if ((n < block_z)
-                || ((n == block_z) && check_delim_flag && (last_block[block_z - 1] == delim))) {
+                if ((n < block_z)
+                    || ((n == block_z) && check_delim_flag && (last_block[block_z - 1] == delim))) {
 
-                last_block.resize(n);
-                break;
+                    last_block.resize(n);
+                    break;
+                }
+
+                block_l.push_back(last_block);
             }
 
-            block_l.push_back(last_block);
+            /* final result is concatenation of:
+             *   - strings in block_l
+             *   - followed by last_block
+             */
+
+            std::string retval;
+
+            retval.resize((block_l.size() * block_z) + last_block.size());
+
+            /* note: using form below so memory for each block is released
+             *       as soon as its contents has been copied to retval.
+             */
+            i_block = 0;
+            for (; !block_l.empty(); ++i_block) {
+                std::string & s = block_l.front();
+
+                std::copy(s.data(),
+                          s.data() + s.size(),
+                          retval.data() + (i_block * block_z));
+
+                block_l.pop_front();
+            }
+
+            std::copy(last_block.data(),
+                      last_block.data() + last_block.size(),
+                      retval.data() + block_l.size() * block_z);
+
+            return retval;
         }
-
-        /* final result is concatenation of strings in block_l, followed by last_block */
-
-        std::string retval;
-
-        retval.resize((block_l.size() * block_z) + last_block.size());
-
-        i_block = 0;
-        for (std::string const & s : block_l) {
-            std::copy(s.data(),
-                      s.data() + s.size(),
-                      retval.data() + (i_block * block_z));
-            ++i_block;
-        }
-
-        std::copy(last_block.data(),
-                  last_block.data() + last_block.size(),
-                  retval.data() + block_l.size() * block_z);
-
-        return retval;
-    }
->>>>>>> Stashed changes
 
     /* move-assignment */
     basic_zstream & operator=(basic_zstream && x) {
