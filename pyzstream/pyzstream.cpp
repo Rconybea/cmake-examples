@@ -280,20 +280,6 @@ PYBIND11_MODULE(pyzstream, m) {
              py::doc("Read stream content (uncompressing), splitting into lines on each newline.\n"
                      "If hint >= 0,  stop once total number of chars read reaches hint.\n"))
         .def("write",
-             [](zstream & zs, std::string const & x)
-                 {
-                     zstream::pos_type p0 = zs.tellp();
-
-                     zs.write(x.data(), x.size());
-
-                     zstream::pos_type p1 = zs.tellp();
-
-                     /* note: couldn't return 'this' here, b/c don't know address of unique python wrapper object */
-                     return (p1 - p0);
-                 },
-             py::arg("x"),
-             py::doc("Write string x to this zstream"))
-        .def("write",
              [](zstream & zs, py::object const & x) -> uint64_t
                  {
                      uint64_t retval = 0;
@@ -379,7 +365,9 @@ PYBIND11_MODULE(pyzstream, m) {
                      return retval;
                  },
              py::arg("x"),
-             py::doc("Write String (for stream opened in text mode) x or bytes-like object (for stream opened in binary mode) x onto this stream.\n"
+             py::doc("Write x onto this stream.\n"
+                     "x must be a str (for stream opened in text mode),\n"
+                     "or bytes-like object (for stream opened in binary mode).\n"
                      "Returns the number of (uncompressed) bytes written\n"))
         .def("sync",
              &zstream::sync,

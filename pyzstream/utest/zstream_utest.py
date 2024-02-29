@@ -1,4 +1,5 @@
 import pyzstream
+import array
 import unittest
 import subprocess
 import logging
@@ -307,8 +308,8 @@ Adipiscing commodo elit at imperdiet dui.
 
         self.assertEqual(zs.is_open(), False)
         self.assertEqual(zs.is_closed(), True)
+        self.assertEqual(zs.eof(), True)
 
-        self.assertEqual(zs.tellg(), 0)
-        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.tellg(), -1)
+        self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
-
