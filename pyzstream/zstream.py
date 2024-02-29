@@ -87,7 +87,8 @@ class ZstreamBase(io.IOBase):
         """
         return self._zstream.is_closed()
 
-    # def fileno(self):    # TODO
+    def fileno(self):
+        return self._zstream.native_handle()
 
     def isatty(self):
         # interactive compressed stream not supported
