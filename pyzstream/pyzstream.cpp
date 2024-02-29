@@ -210,6 +210,41 @@ PYBIND11_MODULE(pyzstream, m) {
              py::doc("Read z characters from stream.\n"
                      "Return string containing the characters read.\n"
                      "Set both fail and eof bits if less than z characters are available.\n"))
+        .def("readinto",
+             [](zstream & zs, py::object const & x) -> int64_t
+                 {
+                     Py_buffer buffer_details;
+
+                     if (PyObject_GetBuffer(x.ptr(), &buffer_details, PyBUF_C_CONTIGUOUS | PyBUF_WRITABLE) != 0)
+                         throw py::error_already_set();
+
+                     zstream::pos_type p0 = zs.tellg();
+
+                     /* here: can read buffer_details.len bytes into buffer_details.buf */
+                     if (buffer_details.len > 0) {
+                         zs.read(reinterpret_cast<char *>(buffer_details.buf), buffer_details.len);
+                     }
+
+                     zstream::pos_type p1 = zs.tellg();
+
+                     PyBuffer_Release(&buffer_details);
+
+                     return (p1 - p0);
+
+#ifdef OBSOLETE
+                     char * buf_data = PyByteArray_AS_STRING(buf.ptr());
+                     size_t buf_z = buf.size();
+
+                     if (buf_data && (buf_z > 0)) {
+                         zs.read(buf_data, buf_z);
+                         return zs.gcount();
+                     } else {
+                         return 0;
+                     }
+#endif
+                 },
+             py::arg("buf"),
+             py::doc("Read into writable python bytes-like object."))
         .def("readline",
              [](zstream & zs, std::streamsize z)
                  {

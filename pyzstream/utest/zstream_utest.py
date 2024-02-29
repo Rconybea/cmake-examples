@@ -313,3 +313,31 @@ Adipiscing commodo elit at imperdiet dui.
         self.assertEqual(zs.tellg(), -1)
         self.assertEqual(zs.tellp(), -1)
         self.assertEqual(zs.native_handle(), -1)
+        a2 = array.array('i')
+        a2.frombytes(b)
+
+        self.assertEqual(a, a2)
+
+        # reopen stream, this time will use .readinto()
+        zs.open('binary.gz', openmode.input | openmode.binary)
+
+        self.assertEqual(zs.openmode(), openmode.input | openmode.binary)
+        self.assertEqual(zs.is_readable(), True)
+        self.assertEqual(zs.is_writable(), False)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
+        self.assertTrue(zs.native_handle() >= 0)
+
+        # a2: array with same size as a,  but different contents
+        a2 = array.array('i', range(10,20))
+
+        n2 = zs.readinto(a2)
+
+        self.assertEqual(n, n2)
+        self.assertEqual(a, a2)
+
+        self.assertEqual(zs.tellg(), n2)
+        self.assertEqual(zs.tellp(), 0)
