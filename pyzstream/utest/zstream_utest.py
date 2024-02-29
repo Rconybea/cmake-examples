@@ -212,22 +212,23 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.openmode(), openmode.input)
         self.assertEqual(zs.is_readable(), True)
         self.assertEqual(zs.is_writable(), False)
-        self.assertEqual(zs.is_open(), True)
-        self.assertEqual(zs.is_closed(), False)
-        self.assertEqual(zs.eof(), False)
-        self.assertEqual(zs.tellg(), n)
-        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.is_open(), False)
+        self.assertEqual(zs.is_closed(), True)
+        # want eof state for closed stream
+        self.assertEqual(zs.eof(), True)
 
+        # attempt .readline() on closed stream
         s2=zs.readline()
 
         self.assertEqual(s2, '')
         self.assertEqual(zs.eof(), True)
-        self.assertTrue(zs.native_handle() >= 0)
+        self.assertEqual(zs.fail(), True)
+        self.assertEqual(zs.native_handle(), -1)
 
         zs.close()
 
         self.assertEqual(zs.is_open(), False)
         self.assertEqual(zs.is_closed(), True)
-        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.eof(), True)
         self.assertEqual(zs.native_handle(), -1)
 

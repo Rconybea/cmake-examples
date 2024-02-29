@@ -194,7 +194,9 @@ public:
                         }
 
                         if (nr < n-1) {
-                            /* go directly to .rdbuf to ignore fmtflags */
+                            /* go directly to .rdbuf to ignore fmtflags
+                             *
+                             */
                             int_type nextc = this->rdbuf_.sgetc();
 
                             if (nextc == Traits::to_int_type(delim)) {
