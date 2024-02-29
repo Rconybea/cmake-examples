@@ -339,11 +339,8 @@ Adipiscing commodo elit at imperdiet dui.
 
         a2 = array.array('i')
         a2.frombytes(b)
->>>>>>> Stashed changes
 
-        #a2 = array.array('i')
-        #a2.frombytes(b)
-        #self.assertEqual(a, a2)
+        self.assertEqual(a, a2)
 
         # reopen stream, this time will use .readinto()
         zs.open('binary.gz', openmode.input | openmode.binary)
