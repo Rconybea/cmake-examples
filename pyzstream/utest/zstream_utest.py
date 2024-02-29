@@ -107,6 +107,8 @@ class Test_zstream(unittest.TestCase):
         s = 'hello, world!\n'
         n = zs.write(s)
 
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
         self.assertEqual(n, len(s))
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), n)
@@ -114,6 +116,8 @@ class Test_zstream(unittest.TestCase):
 
         zs.close()
 
+        self.assertEqual(zs.is_open(), False)
+        self.assertEqual(zs.is_closed(), True)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
         self.assertEqual(zs.native_handle(), -1)
@@ -177,6 +181,7 @@ class Test_zstream(unittest.TestCase):
         self.assertEqual(zs.is_closed(), False)
         self.assertEqual(zs.eof(), False)
         self.assertEqual(zs.fail(), False)
+        self.assertEqual(zs.gcount(), 0)
         self.assertEqual(zs.tellg(), 0)
         self.assertEqual(zs.tellp(), 0)
 
@@ -184,9 +189,9 @@ class Test_zstream(unittest.TestCase):
         s2 = zs.get(32, '\0')
         #s2=zs.readline()
 
+        self.assertEqual(s2, s)
         self.assertEqual(zs.eof(), True)
         self.assertEqual(zs.fail(), False)
-        self.assertEqual(s2, s)
         self.assertEqual(zs.gcount(), n)
         self.assertEqual(zs.tellg(), -1)
         self.assertEqual(zs.tellp(), -1)
