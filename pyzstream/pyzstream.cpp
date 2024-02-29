@@ -293,6 +293,94 @@ PYBIND11_MODULE(pyzstream, m) {
                  },
              py::arg("x"),
              py::doc("Write string x to this zstream"))
+        .def("write",
+             [](zstream & zs, py::object const & x) -> uint64_t
+                 {
+                     uint64_t retval = 0;
+
+                     if (zs.is_binary()) {
+                         /* For binary streams, want to be able to accept any python bytes-like object here:
+                          * i.e. an object that:
+                          * - supports the Buffer Protocol
+                          * - can export a C-contiguous buffer;
+                          * This includes bytes, bytearray, array.array, some memoryview objects.
+                          *
+                          * From
+                          *   https://docs.python.org/3/c-api/buffer.html#bufferobjects:
+                          * Use PyObject_GetBuffer() to acquire buffer assoc'd with target object;
+                          * then PyBuffer_Release() when done.
+                          *
+                          * flags: see
+                          *   https://docs.python.org/3/c-api/buffer.html
+                          *
+                          *   PyBUF_STRIDES PyBUF_FORMAT PyBUF_WRITABLE
+                          */
+
+                         Py_buffer buffer_details;
+
+                         if (PyObject_GetBuffer(x.ptr(), &buffer_details, PyBUF_C_CONTIGUOUS) != 0)
+                             throw py::error_already_set();
+
+                         try {
+                             zstream::pos_type p0 = zs.tellp();
+
+                             /* note: contiguous array --> .buf refers to beginning of memory block */
+                             zs.write(static_cast<char const *>(buffer_details.buf), buffer_details.len);
+
+                             /* ostream.write() doesn't report #bytes written
+                              * (though may set state flags failbit/badbit)
+                              */
+                             zstream::pos_type p1 = zs.tellp();
+
+                             /* report #of uncompressed chars written */
+                             retval = (p1 - p0);
+
+                             PyBuffer_Release(&buffer_details);  /*must call exactly once*/
+                         } catch(...) {
+                             PyBuffer_Release(&buffer_details);  /*must call exactly once*/
+
+                             throw;
+                         }
+                     } else {
+                         /* For text streams,  python string could use any of utf-8, utf-16, utf-32;
+                          * convert to utf-8 for output to zstream.
+                          *
+                          * We could write a shorter version using py::cast<std::string>(); but
+                          * std::string ctor would make extra copy of string contents.
+                          *
+                          * Starting with python 3.10,  could perhaps use PyUnicode_AsUTF8StringAndSize() here instead;
+                          * caches utf-8 representation in source object and takes responsibility for storage
+                          */
+                         py::object tmp = x;
+
+                         if (PyUnicode_Check(tmp.ptr())) {
+                             tmp = py::reinterpret_steal<py::object>(PyUnicode_AsUTF8String(x.ptr()));
+                             if (!tmp)
+                                 throw py::error_already_set();
+                         }
+
+                         char * buf = nullptr;
+                         int64_t buf_z = 0;
+
+                         if (PyBytes_AsStringAndSize(tmp.ptr(), &buf, &buf_z) != 0)
+                             throw py::error_already_set();
+
+                         /* write buf[0 .. buf_z-1] to zs */
+
+                         zstream::pos_type p0 = zs.tellp();
+
+                         zs.write(buf, buf_z);
+
+                         zstream::pos_type p1 = zs.tellp();
+
+                         retval = (p1 - p0);
+                     }
+
+                     return retval;
+                 },
+             py::arg("x"),
+             py::doc("Write String (for stream opened in text mode) x or bytes-like object (for stream opened in binary mode) x onto this stream.\n"
+                     "Returns the number of (uncompressed) bytes written\n"))
         .def("sync",
              &zstream::sync,
              py::doc("Sync stream state with filesystem (i.e. flush output)."))

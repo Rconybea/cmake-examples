@@ -270,3 +270,45 @@ Adipiscing commodo elit at imperdiet dui.
         self.assertEqual(''.join(l), s)
 
         #print("l={l}".format(l=l))
+
+
+    def test_binary(self):
+        """
+        test using buffer protocol to write to a compressed binary stream;
+        then use readinto() to read back from that stream
+        """
+
+        from pyzstream import openmode
+
+        # need binary stream to activate buffer protocol (see pyzstream.cpp for branch)
+        zs = pyzstream.zstream(16384,
+                               "binary.gz",
+                               openmode.output | openmode.binary)
+
+        self.assertEqual(zs.openmode(), openmode.output | openmode.binary)
+        self.assertEqual(zs.is_readable(), False)
+        self.assertEqual(zs.is_writable(), True)
+        self.assertEqual(zs.is_open(), True)
+        self.assertEqual(zs.is_closed(), False)
+        self.assertEqual(zs.eof(), False)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
+        self.assertTrue(zs.native_handle() >= 0)
+
+        a = array.array('i', range(10))
+
+        n = zs.write(a)
+
+        self.assertTrue(n > 0)
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), n)
+
+        zs.close()
+
+        self.assertEqual(zs.is_open(), False)
+        self.assertEqual(zs.is_closed(), True)
+
+        self.assertEqual(zs.tellg(), 0)
+        self.assertEqual(zs.tellp(), 0)
+        self.assertEqual(zs.native_handle(), -1)
+
