@@ -152,4 +152,5 @@ Text::s_text
    ". Elementum facilisis leo vel fringilla est"
    ". Eros in cursus turpis massa tincidunt dui ut"
    ". In arcu cursus euismod quis viverra"
-   "!\n");
+   "!\n"
+    );

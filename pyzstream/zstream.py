@@ -93,7 +93,9 @@ class ZstreamBase(io.IOBase):
         # interactive compressed stream not supported
         return False
 
-    # def readline(self, z = -1):   # TODO
+    def readline(self, z = -1):
+        return self._zstream.readline(z)
+
     # def readlines(self, hint = -1):    # TODO
 
     def writelines(self, l):
