@@ -208,7 +208,7 @@ PYBIND11_MODULE(pyzstream, m) {
                  },
              py::arg("z") = -1,
              py::doc("Read z characters from stream.\n"
-                     "Return string containing the characters read.\n"
+                     "Return string containing the characters read.\n")
             )
         .def("read",
              [](zstream & zs, std::streamsize z) -> py::object
