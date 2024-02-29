@@ -58,7 +58,12 @@ class ZstreamBase(io.IOBase):
         """
         return self._zstream.read(z)
 
-    # def readinto(b):   # TODO
+    def readinto(b):
+        """
+        Read into existing bytes-like object,
+        and return number of bytes read.
+        """
+        return self._zstream.readinto(b)
 
     def write(self, s):
         return self._zstream.write(s)
