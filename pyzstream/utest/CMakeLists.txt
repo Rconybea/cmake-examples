@@ -1,4 +1,4 @@
-set(SELF_UTEST pyzstream.utest)
+set(SELF_UTEST pyzstream_utest)
 set(SELF_UTEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/${SELF_UTEST})
 
 # generate runner script so that it's convenient to invoke from command line
