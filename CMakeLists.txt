@@ -39,6 +39,38 @@ message("-- PROJECT_CXX_FLAGS_DEBUG: debug c++ flags are [${PROJECT_CXX_FLAGS_DE
 add_compile_options("$<$<CONFIG:DEBUG>:${PROJECT_CXX_FLAGS_DEBUG}>")
 
 # ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=asan
+
+# clear out hardwired default.
+# we want override project-level defaults, so need to prevent interference from hardwired defaults
+# (the problem with non-empty hardwired defaults is that we can't tell if they've been set on the
+# command line)
+#
+set(CMAKE_CXX_FLAGS_ASAN "")
+
+# CMAKE_CXX_FLAGS_DEBUG is built-in to cmake and has non-empty default.
+#  -> we cannot tell whether it was set on the command line
+#  -> use PROJECT_CXX_FLAGS_DEBUG instead
+#
+# built-in default value is -g; can hardwire different project policy here
+#
+if (NOT DEFINED PROJECT_CXX_FLAGS_ASAN)
+    set(PROJECT_CXX_FLAGS_ASAN ${PROJECT_CXX_FLAGS} -Og -fsanitize=address
+        CACHE STRING "asan c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_ASAN: asan c++ flags are [${PROJECT_CXX_FLAGS_ASAN}]")
+
+add_compile_options("$<$<CONFIG:ASAN>:${PROJECT_CXX_FLAGS_ASAN}>")
+
+if (NOT DEFINED PROJECT_LINK_FLAGS_ASAN)
+    set(PROJECT_LINK_FLAGS_ASAN ${PROJECT_LINK_FLAGS} -fsanitize=address
+        CACHE STRING "asan link flags")
+endif()
+message("-- PROJECT_LINK_FLAGS_ASAN: asan link flags are [${PROJECT_LINK_FLAGS_ASAN}]")
+
+add_link_options("$<$<CONFIG:ASAN>:${PROJECT_LINK_FLAGS_ASAN}>")
+
+# ----------------------------------------------------------------
 # cmake -DCMAKE_BUILD_TYPE=release
 
 # clear out hardwired default.
