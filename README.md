@@ -41,17 +41,18 @@ and to provide an opinionated (though possibly flawed) version of best practice
 12. ex12: refactor: use inflate/deflate (streaming) api for non-native solution
 13. ex13: example c++ header-only library A2 (`zstream`) with A2 -> A1 -> O2, monorepo-style
 14. ex14: github CI example
+15. ex15: add unit test code coverage (using `gcov` and `lcov`)
+16. ex16: add performance benchmarks (as provided by `catch2`)
 
-* ex15: find_package() support
 * ex16: add pybind11 library (pyzstream)
-* ex17: add sphinx doc
+* ex17: provide cmake find_package() support with installs of our example codebase
+* ex18: add sphinx doc
 
 * c++ executable X + library A, A -> O, separable-style
    provide find_package() support - can build using X-subdir's cmake if A built+installed
 * project-specific macros - simplify
 * project-specific macros - support (monorepo, separable) builds from same tree
 * add performance benchmarks.
-* add code coverage.
 
 - monorepo-style: artifacts using dependencies supplied from same repo and build tree
 
@@ -4079,3 +4080,486 @@ Remarks:
 4. We can achieve a fully-reproducible CI pipeline by containerizing.
    See `.github/workflows/main.yml` in https://github.com/rconybea/xo-nix3 for github CI workflow using a custom docker container.
    See https://github.com/rconybea/docker-xo-builder for construction of the docker container
+
+# Example 15
+
+Provide unit test coverage.
+We will use gcov and lcov.
+
+```
+$ cd cmake-examples
+$ git switch ex15
+```
+
+source tree
+```
+$ tree
+.
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── app
+│   ├── hello
+│   │   ├── CMakeLists.txt
+│   │   └── hello.cpp
+│   └── myzip
+│       ├── CMakeLists.txt
+│       ├── myzip.cpp
+│       └── utest
+│           ├── CMakeLists.txt
+│           ├── myzip.utest
+│           └── textfile
+├── cmake
+│   ├── gen-ccov.in
+│   └── lcov-harness
+├── compile_commands.json -> build/compile_commands.json
+├── compression
+│   ├── CMakeLists.txt
+│   ├── buffered_deflate_zstream.cpp
+│   ├── buffered_inflate_zstream.cpp
+│   ├── compression.cpp
+│   ├── deflate_zstream.cpp
+│   ├── include
+│   │   └── compression
+│   │       ├── base_zstream.hpp
+│   │       ├── buffer.hpp
+│   │       ├── buffered_deflate_zstream.hpp
+│   │       ├── buffered_inflate_zstream.hpp
+│   │       ├── compression.hpp
+│   │       ├── deflate_zstream.hpp
+│   │       ├── inflate_zstream.hpp
+│   │       ├── span.hpp
+│   │       └── tostr.hpp
+│   ├── inflate_zstream.cpp
+│   └── utest
+│       ├── CMakeLists.txt
+│       ├── compression.test.cpp
+│       └── compression_utest_main.cpp
+└── zstream
+    ├── CMakeLists.txt
+    ├── include
+    │   └── zstream
+    │       ├── zstream.hpp
+    │       └── zstreambuf.hpp
+    └── utest
+        ├── CMakeLists.txt
+        ├── text.cpp
+        ├── text.hpp
+        ├── zstream.test.cpp
+        ├── zstream_utest_main.cpp
+        └── zstreambuf.test.cpp
+
+13 directories, 40 files
+```
+
+Changes:
+1. in toplevel `CMakeLists.txt` provide default compile flags for configuration `COVERAGE`.
+   (configuration activates with `cmake -DCMAKE_BUILD_TYPE=coverage ...`)
+2. when building under the `COVERAGE` configuration, executable targets will need to link with the `gcov` library.
+3. locate `lcov` and `genhtml` executables
+4. scripts to post-process coverage information.
+   We split this into:
+   - a cmake template (`gen-ccov.in`) to transfer configuration variables from cmake to shell
+   - a worker script (`lcov-harness`) to collect and tidy gcov-generated data sets,  then forward to `lcov`.
+
+in `cmake-examples/CMakeLists.txt`:
+
+compile flags (in toplevel `CMakeLists.txt`)
+```
+# ----------------------------------------------------------------
+# cmake -DCMAKE_BUILD_TYPE=coverage
+
+if (NOT DEFINED PROJECT_CXX_FLAGS_COVERAGE)
+    # note: for clang would use -fprofile-instr-generate -fcoverage-mapping here instead and also at link time
+    set(PROJECT_CXX_FLAGS_COVERAGE ${PROJECT_CXX_FLAGS} -ggdb -Og -fprofile-arcs -ftest-coverage
+        CACHE STRING "coverage c++ compiler flags")
+endif()
+message("-- PROJECT_CXX_FLAGS_COVERAGE: coverage c++ flags are [${PROJECT_CXX_FLAGS_COVERAGE}]")
+
+add_compile_options("$<$<CONFIG:COVERAGE>:${PROJECT_CXX_FLAGS_COVERAGE}>")
+```
+
+conditionally link `gcov` (in toplevel `CMakeLists.txt`)
+```
+# when -DCMAKE_BUILD_TYPE=coverage, link executables with gcov
+link_libraries("$<$<CONFIG:COVERAGE>:gcov>")
+```
+
+locate `lcov` and `genhtml` (in toplevel `CMakeLists.txt`)
+```
+find_program(LCOV_EXECUTABLE NAMES lcov)
+find_program(GENHTML_EXECUTABLE NAMES genhtml)
+```
+
+generate wrapper script `path/to/build/gen-ccov`
+```
+# with coverage build:
+# 1. invoke instrumented executables for which you want coverage:
+#     (cd path/to/build && ctest)
+# 2. post-process low-level coverage data
+#     (path/to/build/gen-ccov)
+# 3. point browser to generated html data
+#     file:///path/to/build/ccov/html/index.html
+#
+configure_file(
+    ${PROJECT_SOURCE_DIR}/cmake/gen-ccov.in
+    ${PROJECT_BINARY_DIR}/gen-ccov)
+
+file(CHMOD ${PROJECT_BINARY_DIR}/gen-ccov
+     PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+```
+
+script template `cmake/gen-ccov.in`:
+```
+#!/usr/bin/env bash
+
+srcdir=@PROJECT_SOURCE_DIR@
+builddir=@PROJECT_BINARY_DIR@
+lcov=@LCOV_EXECUTABLE@
+genhtml=@GENHTML_EXECUTABLE@
+
+if [[ $lcov == "LCOV_EXECUTABLE-NOTFOUND" ]]; then
+    echo "gen-ccov: lcov executable not found"
+    exit 1
+fi
+
+if [[ $genhtml == "GENHTML_EXECUTABLE-NOTFOUND" ]]; then
+    echo "gen-ccov: genhtml executable not found"
+    exit 1
+fi
+
+mkdir $builddir/ccov
+
+$srcdir/cmake/lcov-harness $srcdir $builddir $builddir/ccov/out $lcov $genhtml
+```
+
+worker script `cmake/lcov-harness`,  invoked by `gen-ccov`:
+```
+#!/usr/bin/env bash
+
+srcdir=$1
+builddir=$2
+outputstem=$3
+lcov=$4
+genhtml=$5
+
+if [[ -z "${srcdir}" ]]; then
+    echo "lcov-harness: expected non-empty srcdir"
+    exit 1
+fi
+
+if [[ -z ${builddir} ]]; then
+    echo "lcov-harness: expected non-empty builddir"
+    exit 1
+fi
+
+if [[ -z ${outputstem} ]]; then
+    echo "lcov-harness: expected non-empty outputstem"
+    exit 1
+fi
+
+if [[ -z ${lcov} ]]; then
+    echo "lcov-harness: exepcted non-empty lcov"
+    exit 1
+fi
+
+if [[ -z ${genhtml} ]]; then
+    echo "lcov-harness: expected non-empty genhtml"
+    exit 1
+fi
+
+# directory stems for location of {.gcda, gcno} coverage information,
+#
+# if we have source tree:
+#
+#   ${srcdir}
+#   +- foo
+#   |  \- foo.cpp
+#   \- bar
+#      \- quux
+#         +- quux.cpp
+#         \- quux_main.cpp
+#
+# then we expect build tree:
+#
+#   ${builddir}
+#   +- foo
+#   |  \- CMakeFiles
+#   |     \- foo_target.dir
+#   |        +- foo.cpp.gcda
+#   |        \- foo.cpp.gcno
+#   +- bar
+#      \- quux
+#         \- CMakeFiles
+#            \- target4quux.dir
+#               +- quux.cpp.gcda
+#               +- quux.cpp.gcno
+#               +- quux_main.cpp.gcda
+#               \- quux_main.cpp.gcno
+#
+# in which case will have cmd_body:
+#
+#   ${primarydirs}
+#      ./foo/CMakeFiles/foo_target.dir
+#      ./bar/quux/CMakeFiles/target4quux.dir
+#
+# here foo_target, quux_target are whatever build is using for corresponding cmake target names.
+#
+# We want to invoke lcov like:
+#
+#   lcov --capture \
+#        --output ${builddir}/ccov \
+#        --exclude /utest/ \
+#        --base-directory ${srcdir}/foo --directory ${builddir}/foo/CMakeFiles/foo_target.dir \
+#        --base-directory ${srcdir}/bar/quux --directory ${builddir}/bar/quux/CMakeFiles/target4quux.dir
+#
+primarydirs=$(cd ${builddir} && find -name '*.gcno' \
+                  | xargs --replace=xx dirname xx \
+                  | uniq \
+                  | sed -e 's:^\./::')
+
+#echo "primarydirs=${primarydirs}"
+
+cmd="${lcov} --output ${outputstem}.info --capture --ignore-errors source"
+
+for bdir in ${primarydirs}; do
+    sdir=$(dirname $(dirname ${bdir}))
+
+    cmd="${cmd} --base-directory ${srcdir}/${sdir} --directory ${builddir}/${bdir}"
+done
+
+#echo cmd=${cmd}
+
+set -x
+
+# capture
+${cmd}
+
+# keep only files with paths under source tree
+# (don't want coverage for external libraries such as libstdc++ etc)
+${lcov} --extract ${outputstem}.info "${srcdir}/*" --output ${outputstem}2.info
+
+# remove unit test dirs
+# (we're interested in coverage of our installed code,  not of the unit tests that exercise it)
+${lcov} --remove ${outputstem}2.info '*/utest/*' --output ${outputstem}3.info
+
+# generate .html tree
+mkdir -p ${builddir}/ccov/html
+${genhtml} --ignore-errors source --show-details --prefix ${srcdir} --output-directory ${builddir}/ccov/html ${outputstem}3.info
+
+# also send report to stdout
+${lcov} --list ${outputstem}3.info
+```
+
+To build with code coverage enabled:
+```
+$ cd cmake-examples
+$ cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=coverage -B build_coverage
+$ cmake --build build_coverage -j
+$ (cd build_coverage && ctest)    # run instrument tests to generate coverage data
+$ ./build_coverage/gen-ccov       # collect + post-process coverage data, generate html tree in ./build_ccov/ccov
+...
++ lcov --list /home/roland/proj/cmake-examples/build_coverage/ccov/out3.info
+Reading tracefile /home/roland/proj/cmake-examples/build_coverage/ccov/out3.info
+                                               |Lines      |Functions|Branches
+Filename                                       |Rate    Num|Rate  Num|Rate   Num
+================================================================================
+[/home/roland/proj/cmake-examples/app/myzip/]
+myzip.cpp                                      |85.7%    35| 100%   1|    -    0
+
+[/home/roland/proj/cmake-examples/compression/]
+buffered_deflate_zstream.cpp                   | 100%     5| 100%   1|    -    0
+buffered_inflate_zstream.cpp                   | 100%     5| 100%   1|    -    0
+compression.cpp                                |75.7%    74| 100%   4|    -    0
+deflate_zstream.cpp                            |85.2%    27|75.0%   4|    -    0
+include/compression/base_zstream.hpp           |92.3%    13| 100%   1|    -    0
+include/compression/buffer.hpp                 |96.7%    30| 100%   3|    -    0
+include/compression/bu...ed_deflate_zstream.hpp| 100%    18| 100%   5|    -    0
+include/compression/bu...ed_inflate_zstream.hpp|95.0%    20| 100%   7|    -    0
+include/compression/span.hpp                   | 100%     6|    -   0|    -    0
+include/compression/tostr.hpp                  | 100%     9|43.2%  44|    -    0
+inflate_zstream.cpp                            |76.7%    30|75.0%   4|    -    0
+
+[/home/roland/proj/cmake-examples/zstream/include/zstream/]
+zstream.hpp                                    | 100%     7|66.7%   3|    -    0
+zstreambuf.hpp                                 |81.3%    75|90.0%  10|    -    0
+================================================================================
+                                         Total:|85.6%   354|67.0%  88|    -    0
+```
+
+For browseable dataset cross-correlated with source code,
+point web browser to `file:///path/to/build_coverage/ccov/html/index.html`
+
+# Example 16
+
+Add a performance benchmark.   This relies on `catch2`'s builtin functionality.
+
+```
+$ cd cmake-examples
+$ git switch ex16
+```
+
+source tree as per preceding example
+
+Changes:
+1. in `compression.test.cpp` and `compression_utest_main.cpp`,  enable catch2 benchmarking:
+   ```
+   #define CATCH_CONFIG_ENABLE_BENCHMARKING
+   ```
+2. in `compression/utest/compression.test.cpp`,  add benchmark
+3. in `compression/utest/CMakeLists.txt` setup benchmark invocation.
+
+In `compression.test.cpp`:
+
+```
+namespace {
+    void compression_benchmark(char const * deflate_name,
+                               char const * inflate_name,
+                               size_t problem_size)
+    {
+        constexpr size_t i_tc = 2;
+        size_t og_data_z = 0;
+        vector<uint8_t> og_data_v;
+        vector<uint8_t> z_data_v;
+
+        BENCHMARK_ADVANCED(deflate_name)(Catch::Benchmark::Chronometer clock) {
+            /* 1. setup */
+
+            size_t text_z = s_testcase_v[i_tc].og_text.size();
+
+            /* test string comprising consecutive copies of test pattern */
+            og_data_z = problem_size;
+            og_data_v.reserve(og_data_z);
+
+            for (size_t i_copy = 0; i_copy * text_z < problem_size; ++i_copy) {
+                size_t i_start = i_copy * text_z;
+                size_t i_end   = std::min((i_copy + 1) * text_z, problem_size);
+
+                std::copy(s_testcase_v[i_tc].og_text.begin(),
+                          s_testcase_v[i_tc].og_text.begin() + (i_end - i_start),
+                          og_data_v.begin() + i_start);
+            }
+
+            /* 2. run */
+
+            clock.measure([&og_data_v, &z_data_v] {
+                z_data_v = compression::deflate(og_data_v);
+
+                return z_data_v.size();  /* just to make sure optimizer doesn't interfere */
+            });
+        };
+
+        vector<uint8_t> og_data2_v;
+
+        BENCHMARK(inflate_name) {
+            og_data2_v = compression::inflate(z_data_v, og_data_z);
+
+            return og_data2_v.size();
+        };
+
+        REQUIRE(og_data_v == og_data2_v);
+    }
+}
+
+TEST_CASE("compression-benchmark", "[!benchmark]") {
+    compression_benchmark("deflate-128k", "inflate-128k", 128*1024);
+    compression_benchmark("deflate-1m", "inflate-1m", 1024*1024);
+    compression_benchmark("deflate-10m", "inflate-10m", 10*1024*1024);
+    compression_benchmark("deflate-128m", "inflate-128m", 128*1024*1024);
+    compression_benchmark("deflate-1g", "inflate-1g", 1024*1024*1024);
+}
+```
+
+Remarks:
+1. The `[!benchmark]` argument to `TEST_CASE()` is special.
+   It tells `catch2` to treat the `compression-benchmark` test as disabled.
+2. To restore the benchmark,  need:
+   ```
+   ./build/compression/utest/utest.compression '~[benchmark]'
+   ```
+3. This will run the `compression-benchmark` test,
+   along with any other tests using the `[!benchmark]` tag.
+
+In `compression/utest/CMakeLists.txt`,  setup separate pathway for invoking our `utest.compression` benchmark:
+```
+set(SELF_BENCHMARK benchmark.compression)
+...
+add_test(
+    NAME ${SELF_BENCHMARK}
+    COMMAND ${SELF_UTEST} ~[benchmark] --benchmark-no-analysis --benchmark-samples 1)
+set_tests_properties(${SELF_BENCHMARK} PROPERTIES LABELS "benchmark")
+```
+
+To run unit tests (with benchmarks excluded):
+```
+$ cd cmake-examples/build
+$ ctest -E benchmark
+Test project /home/roland/proj/cmake-examples/build
+    Start 1: utest.compression
+1/3 Test #1: utest.compression ................   Passed    0.00 sec
+    Start 2: utest.zstream
+2/3 Test #2: utest.zstream ....................   Passed    0.04 sec
+    Start 3: myzip.utest
+3/3 Test #3: myzip.utest ......................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Total Test time (real) =   0.05 sec
+```
+
+To run benchmarks:
+```
+$ cd cmake-examples/build
+$ ctest -L benchmark --verbose   # need verbose to get benchmark output on console
+UpdateCTestConfiguration  from :/home/roland/proj/cmake-examples/build/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/home/roland/proj/cmake-examples/build/DartConfiguration.tcl
+Test project /home/roland/proj/cmake-examples/build
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 2
+    Start 2: benchmark.compression
+
+2: Test command: /home/roland/proj/cmake-examples/build/compression/utest/utest.compression "~[benchmark]" "--benchmark-no-analysis" "--benchmark-samples" "1"
+2: Working Directory: /home/roland/proj/cmake-examples/build/compression/utest
+2: Test timeout computed to be: 10000000
+2: Filters: ~[benchmark]
+2:
+2: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2: utest.compression is a Catch v2.13.10 host application.
+2: Run with -? for options
+2:
+2: -------------------------------------------------------------------------------
+2: compression-benchmark
+2: -------------------------------------------------------------------------------
+2: /home/roland/proj/cmake-examples/compression/utest/compression.test.cpp:127
+2: ...............................................................................
+2:
+2: benchmark name                            samples    iterations          mean
+2: -------------------------------------------------------------------------------
+2: deflate-128k                                     1            14    2.47621 us
+2: inflate-128k                                     1            20     2.3415 us
+2: deflate-1m                                       1            13    2.64892 us
+2: inflate-1m                                       1             2    89.8385 us
+2: deflate-10m                                      1            14    2.63143 us
+2: inflate-10m                                      1             1     766.34 us
+2: deflate-128m                                     1            14      2.741 us
+2: inflate-128m                                     1             1     13.658 ms
+2: deflate-1g                                       1            14    2.88914 us
+2: inflate-1g                                       1             1    256.041 ms
+2:
+2: ===============================================================================
+2: All tests passed (8 assertions in 2 test cases)
+2:
+1/1 Test #2: benchmark.compression ............   Passed   14.65 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+benchmark    =  14.65 sec*proc (1 test)
+
+Total Test time (real) =  14.65 sec
+```
