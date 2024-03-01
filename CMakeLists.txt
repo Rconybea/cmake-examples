@@ -10,7 +10,8 @@ message("-- CMAKE_CXX_STANDARD: CXX standard is [${CMAKE_CXX_STANDARD}]")
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if (NOT DEFINED PROJECT_CXX_FLAGS)
-    set(PROJECT_CXX_FLAGS "-Werror -Wall -Wextra" CACHE STRING "project-wide cxx flags")
+    set(PROJECT_CXX_FLAGS -Werror -Wall -Wextra
+        CACHE STRING "project-wide cxx flags")
 endif()
 message("-- PROJECT_CXX_FLAGS: project CXX flags are [${PROJECT_CXX_FLAGS}]")
 
