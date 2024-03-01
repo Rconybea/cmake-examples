@@ -28,3 +28,10 @@ install(
 #    LIBRARY DESTINATION ${PYTHON_LIBRARY_PREFIX} COMPONENT Runtime
     LIBRARY DESTINATION ${PYTHON_LIBRARY_PREFIX} COMPONENT Runtime
 )
+
+# .py files are necessarily version-independent,  so can all go to common lib directory
+#
+install(
+    FILES zstream.py
+    PERMISSIONS OWNER_READ GROUP_READ WORLD_READ
+    DESTINATION ${PYTHON_LIBRARY_PREFIX})
