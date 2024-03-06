@@ -148,6 +148,8 @@ message("-- Python_VERSION=${Python_VERSION}")
 #message("Python_VERSION_MINOR=${Python_VERSION_MINOR}")
 set(PYTHON_LIBRARY_PREFIX ${Python_VERSION_MAJOR}.${Python_VERSION_MINOR})
 
+find_program(DOXYGEN_EXECUTABLE NAMES doxygen REQUIRED)
+
 find_package(Catch2 CONFIG REQUIRED)
 find_package(boost_program_options CONFIG REQUIRED)
 find_package(PkgConfig)
@@ -170,3 +172,5 @@ add_subdirectory(pyzstream/utest)
 add_subdirectory(app/hello)
 add_subdirectory(app/myzip)
 add_subdirectory(app/myzip/utest)
+# must come last,  collects include dirs
+add_subdirectory(docs)

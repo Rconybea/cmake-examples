@@ -1,0 +1,152 @@
+/**
+   @mainpage
+
+   @section Zstream
+
+   This project provides streaming compression/uncompression for python and c++.
+
+   It includes:
+
+   - @ref zstream-python  python library implementing python's @c io apis,  to and from @c .gz files
+   - @ref pyzstream       pybind11 library wrapper for zstream
+   - @ref zstream-cpp     c++ library providing streaming compression veriants of @c std::streambuf, @c std::iostream
+   - @ref compression-cpp c++ library providing buffering support around @c zlib
+
+   @section zstream-python zstream.py
+
+   Python library providing automatic inflation/deflation.
+   It supports both text (@c io.TextIOBase) and binary streams (@c io.BufferedIOBase) apis.
+
+   @subsection zstream-python-ex1 Example 1: write text to .gz file
+
+   @code
+
+   from zstream import TextZstream  # implements io.TextIOBase
+
+   zs = TextZstream("foo.gz", 'w')
+   zs.write("Lorem ipsum dolor sit amet\n")
+   zs.close()
+
+   @endcode
+
+   Then from shell:
+
+   @code
+   $ gunzip -c foo.gz
+   Lorem ipsum dolor sit amet
+   $
+   @endcode
+
+   @subsection zstream-python-ex2 Example 2: read text from .gz file
+
+   @code
+
+   from zstream import TextZstream
+
+   zs = TextZstream("foo.gz", 'r')
+   zs.readlines()   # --> ['Lorem ipsum dolor sit amet\n']
+
+   @endcode
+
+   @subsection zstream-python-ex3 Example 3: write object to .gz file
+
+   @code
+
+   from zstream import BufferedZstream  # implements io.BufferedIOBase
+
+   zs = BufferedZstream('foo.gz', mode='w')
+   a = array.array('i', range(10))
+   zs.write(a)
+   zs.close()
+
+   @endcode
+
+   @subsection zstream-python-ex4 Example 4: reconstruct object from .gz file
+
+   @code
+
+   from zstream import BufferedZstream
+
+   zs = BufferedZstream('foo.gz', mode='r')
+
+   a = array.array(i).frombytes(zs.read()) # --> [0, 1, 2, .., 10]
+
+   # alernative method
+
+   zs.open('foo.gz', mode='r')
+   a2 = array.array('i', range(10,20))
+   zs.readinto(a2)
+
+   @endcode
+
+   @section pyzstream
+
+   Python plugin (via pybind11) for working directly with c++ zstreams.
+   Exposes the @ref zstream class (along with @c std::openmode) to python;
+   provides implementation layer for @c TextZstream and @c BufferedZstream above.
+
+   @section zstream-cpp zstream
+
+   The @c zstream library is technically header-only,  but depends on the non-header-only @c compression library
+
+   @c zstream provides:
+   - @ref basic_zstream,     a version of @c std::basic_iostream that does streaming inflation/deflation
+   - @ref basic_zstreambuf,  a version of @c std::basic_streambuf that does streaming inflation/deflation
+
+   Application can likely rely just on @c basic_zstream,  as demonstrated below.
+
+   @subsection zstream-cpp-ex1 Example 1: write text to .gz file
+
+   @code
+   #include <zstream/zstream.hpp>
+
+   using namespace std;
+
+   void lorem(ostream & os) {
+       os << "Lorem ipsum dolor sit amet" << endl;
+   }
+
+   zstream zs("foo.gz", ios::out);
+
+   lorem(zs);
+
+   zs.close();
+   @endcode
+
+   @subsection zstream-cpp-ex2 Example 2: read text from .gz file
+
+   @code
+   #include <zstream/zstream.hpp>
+
+   using namespace std;
+
+   zstream zs("foo.gz", ios::in);
+
+   std::string text;
+   std::getline(zs, text);
+
+   cerr << "got text [" << text << "]" << endl;
+
+   zs.close();
+   @endcode
+
+   expect output:
+   @code
+   [Lorem ipsum dolor sit amet]
+   @endcode
+
+   @section compression-cpp compression
+
+   The compression library provides buffer management on top of @c zlib inflation/deflation.
+   @c compression provides:
+   - @ref deflate_zstream            c++ class for compressing a data stream
+   - @ref buffered_deflate_zstream   adds buffer creation/management to deflate_zstream.
+   - @ref inflate_zstream            c++ class for uncompressing data stream
+   - @ref buffered_inflate_zstream   adds buffer creation/management to inflate_zstream.
+   - @ref compression                c++ class providing static functions for batch inflation/deflation
+
+   @section Notes
+
+   Written for the <a href="https://github.com/Rconybea/cmake-examples">cmake-examples (github)</a> project,
+   a progressive series of cmake examples.
+**/
