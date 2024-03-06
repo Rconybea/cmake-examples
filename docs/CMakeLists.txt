@@ -8,8 +8,9 @@ configure_file(
 
 set(DOX_DEPS ${PROJECT_SOURCE_DIR}/mainpage.dox)
 
-# depending on {library, utest} targets here, as means to getting (indirect)
-# dependency on .hpp files.
+# depending on {library, utest} targets here:
+# - as means to getting (indirect) dependency on .hpp files
+# - so that command rebuilds docs when some source file changed
 #
 set(ALL_LIBRARY_TARGETS compression zstream pyzstream)
 set(ALL_UTEST_TARGETS utest.compression utest.zstream)
@@ -30,12 +31,17 @@ add_custom_command(
 #
 add_custom_target(
     doxygen
-    DEPENDS ${DOXYGEN_INDEX_FILE})
+    DEPENDS ${DOXYGEN_INDEX_FILE}
+)
 
 # - html docs generated in build/docs/html
 # - copy the doc tree to share/doc/cmake-examples/html
 #
+#  OPTIONAL: install directory tree if it exists,
+#            but don't complain if it's missing
 install(
     DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html
     FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/share/doc/${PROJECT_NAME})
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/share/doc/${PROJECT_NAME}
+    COMPONENT Documentation
+    OPTIONAL)
