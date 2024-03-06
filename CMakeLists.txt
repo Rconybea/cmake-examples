@@ -103,10 +103,16 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
     set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
 endif()
 
-if(NOT CMAKE_INSTALL_RPATH)
-    set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib CACHE STRING
-        "runpath in installed libraries/executables")
+# Allows
+#   $ cmake -DCMAKE_INSTALL_PREFIX=new/path -DCMAKE_INSTALL_RPATH=prefix
+# as shorthand for
+#   $ cmake -DCMAKE_INSTALL_PREFIX=new/path -DCMAKE_INSTALL_RPATH=new/path/lib
+#
+if (("${CMAKE_INSTALL_RPATH}" STREQUAL "/var/empty/local/lib") OR ("${CMAKE_INSTALL_RPATH}" STREQUAL "prefix"))
+    set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib)
 endif()
+
+message("-- CMAKE_INSTALL_RPATH=${CMAKE_INSTALL_RPATH}")
 
 # ----------------------------------------------------------------
 
