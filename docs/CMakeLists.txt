@@ -31,3 +31,11 @@ add_custom_command(
 add_custom_target(
     doxygen
     DEPENDS ${DOXYGEN_INDEX_FILE})
+
+# - html docs generated in build/docs/html
+# - copy the doc tree to share/doc/cmake-examples/html
+#
+install(
+    DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/html
+    FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/share/doc/${PROJECT_NAME})
