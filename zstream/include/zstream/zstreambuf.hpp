@@ -1,4 +1,4 @@
-// zstreambuf.hpp
+/** @file zstreambuf.hpp **/
 
 #pragma once
 
@@ -13,61 +13,80 @@
 #include <string>
 #include <memory>
 
-/* implementation of streambuf that provides output to, and input from, a compressed stream
- * Only uses calling thread;  not threadsafe.
- *
- * Example
- *
- * 1. allocating buffer space from zstreambuf ctor
- *
- *    zstreambuf zbuf;
- *
- *    std::unique_ptr<xfilebuf> p(new filebuf());
- *    if (p->open("path/to/file.gz", std::ios::in))
- *        zbuf.adopt_native_sbuf(std::move(p), -1)
- *
- * 2. allocating buffer space separately after ctor
- *
- *    zstreambuf zbuf(0);
- *
- *    zbuf.alloc(64UL*1024UL);
- *
- *    std::unique_ptr<xfilebuf> p(new filebuf());
- *    if (p->open("path/to/file.gz", std::ios::in))
- *        zbuf.adopt_native_sbuf(std::move(p), -1)
- *
- *
- */
+/**
+   @class basic_zstreambuf zstream/zstreambuf.hpp
+
+   @brief Implementation of @c std::basic_streambuf that provides automatic streaming inflation/deflation to gzip format
+
+   Example - allocating buffer space from constructor.
+   @code
+     zstreambuf zbuf;
+
+     std::unique_ptr<xfilebuf> p(new filebuf());
+     if (p->open("path/to/file.gz", std::ios::in))
+         zbuf.adopt_native_sbuf(std::move(p), -1)
+   @endcode
+
+   Example - allocating buffer space after constructor returns.
+   @code
+     zstreambuf zbuf(0);
+
+     zbuf.alloc(64UL*1024UL);
+
+     std::unique_ptr<xfilebuf> p(new filebuf());
+     if (p->open("path/to/file.gz", std::ios::in))
+         zbuf.adopt_native_sbuf(std::move(p), -1)
+   @endcode
+
+   @note Only uses calling thread;  not threadsafe.
+
+   @tparam CharT.  Typename for (uncompressed) characters.  Compressed stream always comprises @c uint8_t's
+   @tparam Traits.  Typename for streambuf traits object.  Typically this will be @c std::char_traits<CharT>.
+**/
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstreambuf : public std::basic_streambuf<CharT, Traits> {
 public:
-    /* Traits must provide:  char_type, int_type, off_type, pos_type, state_type */
+    ///@{
 
+    /** @brief type for buffer sizes **/
     using size_type = std::uint64_t;
-    using char_type = CharT; // = Traits::char_type
+    /** @brief type for character (the same as template parameter @c CharT) **/
+    using char_type = typename Traits::char_type;
+    /** @brief integral type large enough to hold a @c CharT **/
     using int_type = typename Traits::int_type;
+    /** @brief integral type to represent a stream offset **/
     using off_type = typename Traits::off_type;
+    /** @brief integral type to represent a stream position **/
     using pos_type = typename Traits::pos_type;
+    /** @brief type to hold a native handle (i.e. file descriptor) Can get from @p Traits in c++26 **/
     using native_handle_type = int;
 
-    /* default buffer size for inflation/deflation (arbitrarily taking value from inflate side) */
+    ///@}
+
+    /** @brief default buffer size for inflation/deflation (arbitrarily taking value from inflate side) **/
     static constexpr size_type c_default_buf_z = buffered_inflate_zstream::c_default_buf_z;
 
 public:
-    /* Taking care with alignment: if CharT is a wide character type,  probably want/need aligned buffers
+    /**
+     * @brief Creates new zstreambuf.
+     *
+     * @note Taking care with alignment: if @c CharT is a wide character type,  probably want/need aligned buffers
      * for uncompressed data.
      *
-     * buf_z       buffer size for inflation/deflation algorithm.  Buffer memory consumption is 4x this value.
-     *             Allocating memory separately for input (.in_zs), output (.out_zs):
-     *             - .in_zs.z_in_buf buffer compressed input
-     *             - .in_zs.uc_out_buf buffer uncompressed input
-     *             - .out_zs.uc_in_buf buffer uncompressed output
-     *             - .out_zs.z_out_buf buffer compressed output
-     *             Can use 0 to defer buffer allocation
-     * native_sbuf streambuf for doing compressed i/o.
-     *             if this is a filebuf,  it must be in an open state
-     * mode        open mode bitmask.
-     */
+     * @param buf_z   Buffer size for inflation/deflation algorithm.  Actual buffer memory consumption is 4x this value,
+     *        to account for:
+     *             - @c .in_zs_.z_in_buf_   buffer compressed input
+     *             - @c .in_zs_.uc_out_buf_ buffer uncompressed input
+     *             - @c .out_zs_.uc_in_buf_ buffer uncompressed output
+     *             - @c .out_zs_.z_out_buf_ buffer compressed output
+     *        Can use 0 to defer buffer allocation
+     * @param fd     Native handle (file descriptor), if known, that @ref native_sbuf is using.
+     *        Providing to anticipate c++26,  and for the sake of python @c IOBase.fileno() when using this stream from python.
+     * @param native_sbuf  @c streambuf for doing compressed i/o.
+     *         If this is a filebuf,  it must be in an open state
+     * @param mode    Openmode bitmask.  combination of @c std::ios::in, @c std::ios::out, @c std::ios::binary.
+     *       Other openmode bits are ignored
+     **/
     basic_zstreambuf(size_type buf_z = 64 * 1024,
                      native_handle_type fd = -1,
                      std::unique_ptr<std::streambuf> native_sbuf = std::unique_ptr<std::streambuf>(),
@@ -83,31 +102,54 @@ public:
         this->setg_span(in_zs_.uc_contents());
         this->setp_span(out_zs_.uc_avail());
     }
+    /** @brief Destructor.  Recovers resources,  closing stream if necessary. **/
     ~basic_zstreambuf() {
         this->close();
     }
 
+    ///@{
+
+    /** @name Access methods **/
+
+    /** @brief report openmode value recorded the last time this streambuf was opened **/
     std::ios::openmode openmode() const { return openmode_; }
+    /** @brief @c true iff this zstreambuf is in an open state (available for i/o) **/
     bool is_open() const { return !closed_flag_; }
+    /** @brief @c true iff this zstream is in a closed state (not available fopr i/o) **/
     bool is_closed() const { return closed_flag_; }
+    /** @brief @c true iff this zstreambuf was last opened with @c ios::binary set **/
     bool is_binary() const { return (this->openmode_ & std::ios::binary); }
+    /** @brief report native handle (file descriptor), if known **/
     native_handle_type native_handle() const { return native_fd_; }
 
+    /** @brief number of bytes compressed input (according to @c zlib) consumed since this stream last opened **/
     std::uint64_t n_z_in_total() const { return in_zs_.n_in_total(); }
-    /* note: z input side of zstreambuf = output from inflating-zstream */
+    /** @brief number of bytes of inflated input (according to @c zlib) produced since this stream last opened **/
     std::uint64_t n_uc_in_total() const { return in_zs_.n_out_total(); }
 
-    /* note: uc output side of zstreambuf = input to deflating-zstream */
+    /** @brief number of bytes of uncompressed output (according to @c zlib) consumed since this stream last opened **/
     std::uint64_t n_uc_out_total() const { return out_zs_.n_in_total(); }
+    /** @brief number of bytes of deflated output (according to @c zlib) produced since this stream last opened **/
     std::uint64_t n_z_out_total() const { return out_zs_.n_out_total(); }
 
+    /** @brief streambuf responsible for compressed version of this streambuf **/
     std::streambuf * native_sbuf() const { return native_sbuf_.get(); }
 
-    /* (Re)open streambuf,  connected to a file
+    ///@}
+
+    /** @brief (Re)open streambuf,  connected to a file
      *
-     * mode:  only ios::in, ios::out supported.
-     *        (ios::app, ios::trunc, ios::ate, ios::noreplace not supported)
-     */
+     *  If @p mode sets @c std::ios::out:  open @p filename for writing; if file with that name already exists, truncate it;  create new file if necessary.
+     *  If @p mode does not set @c std::ios::out:  open file for reading.
+     *
+     *  @param filename   path to file.  If @c mode&ios::out, create file if necessary,
+     *         and truncate if file already exists.
+     *  @param mode       @c ios::in, @c ios::out only are supported;  @c ios::binary is assumed, whether or not specified.
+     *         (in particular: @c ios::app, @c ios::trunc, @c ios::ate, @c ios::noreplace not supported)
+     *
+     *  @post
+     *  @c .is_open() if file was successfully opened;  @c .is_closed() otherwise
+     **/
     void open(char const * filename,
               std::ios::openmode mode = std::ios::in)
         {
@@ -130,10 +172,12 @@ public:
             }
         }
 
-    /* Allocate buffer space.  May use before reading/writing any data,  after calling ctor with 0 buf_z.
-     * Does not preserve any existing buffer contents.
-     * Not inteended to be used after beginning inflation/deflation work
-     */
+    /** @brief Allocate buffer space before first initiating i/o.
+
+        @warning Not intended to be used after beginning inflation/deflation work.
+
+        @param buf_z   Buffer size.  zstreambuf will create 4 buffers of this size.
+     **/
     void alloc(size_type buf_z = c_default_buf_z) {
         in_zs_.alloc(buf_z, alignment());
         out_zs_.alloc(buf_z, alignment());
@@ -142,8 +186,16 @@ public:
         this->setp_span(out_zs_.uc_avail());
     }
 
-    /* x can refer to any streambuf implementation: stringbuf, filebuf, ..
-     * fd for informational purposes
+    /** @brief Attach a streambuf for dealing with compressed data.
+
+        If @p x is a @c filebuf,  it must be in an open state,  and it's openmode should include @c ios::binary.
+
+        @param x  streambuf for compressed data, for example @c stringbuf or @c filebuf will work here.
+        @param fd  native handle (file descriptor on linux), if known, for informational purposes
+
+        @post @ref is_open = @c true
+        @post @ref native_sbuf = address supplied with @p x
+        @post @ref native_handle = @p fd
      */
     void adopt_native_sbuf(std::unique_ptr<std::streambuf> x,
                            native_handle_type fd = -1)
@@ -222,21 +274,25 @@ public:
     }
 #endif
 
-    /* Given that there will be no more uncompressed output,
-     * commit remaining compressed portion to output stream.
-     *
-     * Exposed only so that application code can observe final byte counters .n_uc_out_total(), .n_z_out_total()
-     * before .close() resets them
-     */
+    /** @brief Flush remaining compressed data;  promise not to write again
+
+        Given that there will be no more uncompressed output,
+        commit remaining compressed portion to output stream.
+
+        Exposed so that application code can observe final byte counters
+        (@ref n_uc_out_total @ref n_z_out_total)
+        before @ref close resets them
+    **/
     void final_sync()
         {
             if (!final_sync_flag_)
                 this->sync_impl(true /*final_flag*/);
         }
 
-    /* we have a problem writing compressed output:  compression algorithm in general
-     * doesn't know how to compress byte n until it has seem byte n+1, .., n+k
-     */
+    /** @brief flush remaining ouput and put stream in a closed state.
+
+        Stream can be reopened using @ref open
+     **/
     void close() {
         this->final_sync();
 
@@ -267,7 +323,7 @@ public:
         }
     }
 
-    /* move-assignment */
+    /** @brief Move-assignment **/
     basic_zstreambuf & operator= (basic_zstreambuf && x) {
         /* assign any base-class state */
         std::basic_streambuf<CharT, Traits>::operator=(x);
@@ -287,6 +343,7 @@ public:
         return *this;
     }
 
+    /** @brief swap state with another basic_zstreambuf **/
     void swap(basic_zstreambuf & x) {
         /* swap any base-class state */
         std::basic_streambuf<CharT, Traits>::swap(x);
@@ -305,7 +362,9 @@ public:
     }
 
 #  ifndef NDEBUG
-    /* control per-instance debug output */
+    /** @brief in a debug build, control logging for this instance
+        @param x  @c true to enable, @c false to disable
+     **/
     void set_debug_flag(bool x) { debug_flag_ = x; }
 #  endif
 
@@ -356,11 +415,13 @@ protected:
      */
     //virtual std::streamsize xs_getn(char_type * s, std::streamsize n) override;
 
-    /* ensure at least one character available in input area.
-     * may update .gptr .egptr .eback to define input data location
-     *
-     * returns next input character (target of get-pointer)
-     */
+    /**
+       @brief Ensure at least one character available for reading in input area.
+
+       May update input pointers (@c gptr @c egptr @c eback) to define input data location
+
+       @retval next input character (target of get-pointer)
+    **/
     virtual int_type underflow() override final {
         /* control here: .input buffer (i.e. .in_zs.uc_input_buf) has been entirely consumed */
 
@@ -441,13 +502,15 @@ protected:
             return Traits::eof();
     }
 
-    /* write contents of .output to .native_sbuf.
-     * 0 on success, -1 on failure
-     *
-     * NOTE: After .sync() returns may still have un-synced output in .output_zs;
-     *       tradeoff here is that if we insist on writing that output,  will change the contents
-     *       of comppressed output + degrade compression quality.
-     */
+    /** @brief Write buffered contents of output to @ref native_sbuf
+
+        @warning After sync returns may still have un-synced output in @ref out_zs_
+        (held privately by @c zlib @c z_stream).
+        Prematurely forcing @c zlib to such output will degrade compression quality.
+        We choose not to do that until end of stream.
+
+        @return @c 0 on success, @c -1 on failure (@c iostream will set @c failbit on failure).
+     **/
     virtual int
     sync() override final {
 #      ifndef NDEBUG
@@ -458,9 +521,14 @@ protected:
         return this->sync_impl(false /*!final_flag*/);
     }
 
-    /* attempt to write n bytes starting at s[] to this streambuf.
-     * returns the #of bytes actually written
-     */
+    /** @brief attempt to write n bytes starting at s[] to this streambuf.
+
+        Write characters @c s[0] .. @c s[n_arg-1] to output.
+
+        @param s      write output starting from this address
+        @param n_arg  number of characters to write
+        @return       number of characters actually written
+    **/
     virtual std::streamsize
     xsputn(CharT const * s, std::streamsize n_arg) override final {
 #      ifndef NDEBUG
@@ -479,18 +547,16 @@ protected:
         if ((openmode_ & std::ios::out) == 0)
             throw std::runtime_error("basic_zstreambuf::xsputn: expected ios::out bit set when writing to streambuf");
 
-        std::streamsize n = n_arg;
+        std::streamsize n_remaining = n_arg;
 
-        std::size_t i_loop = 0;
-
-        while (n > 0) {
+        while (n_remaining > 0) {
             std::streamsize buf_avail = this->epptr() - this->pptr();
 
             if (buf_avail == 0) {
                 /* deflate some more output + free up buffer space */
                 this->sync();
             } else {
-                std::streamsize n_copy = std::min(n, buf_avail);
+                std::streamsize n_copy = std::min(n_remaining, buf_avail);
 
                 ::memcpy(this->pptr(), s, n_copy);
                 this->pbump(n_copy);
@@ -498,19 +564,28 @@ protected:
                 this->out_uc_pos_ += n_copy;
 
                 s += n_copy;
-                n -= n_copy;
+                n_remaining -= n_copy;
             }
-
-            ++i_loop;
         }
 
         return n_arg;
     }
 
-    /* offset:  taken relative to argument way
-     * way:     ios_base::beg | ios_base::cur | ios_base::end
-     * which:   ios_base::in | ios_base::out
-     */
+    /** @brief Report input or output position
+
+        @note
+        Minimal implementation, necessary to support @c zstream methods @c tellg() and @c tellp().
+        - @c tellg(): @c seekoff(0,ios_base::cur,ios::in)
+        - @c tellp(): @c seekoff(0,ios_base::cur,ios::out)
+
+        @param offset   Must be @c 0
+        (in @c streambuf: desired seek offset from reference position)
+        @param way      Must be @c ios_base::cur
+        (in @c streambuf: determines reference position for @p offset).
+        @param which    Must be either @c ios::in or @c ios::out
+        (in @c streambuf: whether to affect input position, output position, or both)
+        @retval desired position;  -1 for unsupported argument combinations
+    **/
     virtual pos_type seekoff(off_type offset,
                              std::ios_base::seekdir way,
                              std::ios_base::openmode which) override final
@@ -572,14 +647,19 @@ protected:
 #endif
 
 private:
-    /* write contents of .output to .native_sbuf.
-     * 0 on success, -1 on failure.
-     *
-     * final_flag = true:  compressed stream is irrevocably complete -- no further output may be written
-     * final_flag = false: after .sync_impl() returns may still have un-synced output in .output_zs
-     *
-     * TODO: sync for input (e.g. consider tailing a file)
-     */
+    /** @brief Commit available compressed output to @ref native_sbuf
+
+        No effect if openmode does not set @c ios::out
+
+        @param final_flag
+        if @c true: compressed stream is complete; flush remainder and prevent further output
+        if @c false: write committed data produced by @c zlib;  trailing suffix may remain pending
+        in private @c zlib state,  to be determined as stream send @c zlib more output
+
+        @return @c 0 on success, @c -1 on failure.
+
+        @pre Stream is @ref open and @ref final_sync has not been called
+    **/
     int
     sync_impl(bool final_flag) {
 #      ifndef NDEBUG
@@ -662,28 +742,36 @@ private:
         }
     }
 
+    /** @brief set @c streambuf input positions to span endpoints
+        @param ucspan  span comprising entirety of available-and-uncompressed input to be read.
+     **/
     void setg_span(span<std::uint8_t> const & ucspan) {
         this->setg(reinterpret_cast<CharT *>(ucspan.lo()),
                    reinterpret_cast<CharT *>(ucspan.lo()),
                    reinterpret_cast<CharT *>(ucspan.hi()));
     }
 
-
+    /** @brief set @c streambuf output positions to span endpoints
+        @param ucspan  span comprising entirety of available-and-not-compressed output to be written
+    **/
     void setp_span(span<std::uint8_t> const & ucspan) {
         this->setp(reinterpret_cast<CharT *>(ucspan.lo()),
                    reinterpret_cast<CharT *>(ucspan.hi()));
     }
 
+    /** @brief alignment to be used for a stream of @p CharT
+
+        This is @c sizeof(CharT).
+        @c alignof(CharT)>sizeof(CharT) would not work since implementation assumes packed buffer arithmetic
+     **/
     static constexpr size_type alignment() {
-        /* note: we can't support alignof(CharT) > sizeof(CharT),
-         *       since we assume CharT's in a stream are packed
-         */
         return sizeof(CharT);
     }
 
-    /* returns #of bytes equal to a multiple of sizeof(CharT),
-     * whichever is larger.  Use this to round up buffer sizes
-     */
+    /** @brief round up size @p z to a whole multiple of CharT size.
+
+        For example if @c sizeof(CharT)=4, and @c z=5,  @c aligned_upper_bound(z) = @c 8
+     **/
     static size_type aligned_upper_bound(size_type z) {
         constexpr size_type m = alignment();
 
@@ -706,61 +794,70 @@ private:
      *                                       .deflate_chunk();
      *                   .sputn()            .z_contents()          .sputn
      *   .pbeg, .pend ------------> .out_zs -------------------------------> .native_sbuf
-     */
-
-    /* we need to know if intending to use this zstreambuf for output:
-     * (i) compressing an empty input sequence produces non-empty output (since will create a 20-byte gzip header)
-     *     Therefore:
-     *     (a) zstream("foo.gz", ios::out) should create valid foo.gz representing an empty sequence.
-     *     (b) .sync_impl(true) needs to know whether to do this,  since it will also be called when intending
-     *         this zstreambuf for input only
-     */
-    std::ios::openmode openmode_;
-
-    /* set on .sync_impl(true) */
-    bool final_sync_flag_ = false;
-    /* set on .close();  assume zstreambuf is open unless this is set */
-    bool closed_flag_ = false;
-
-    /* input position,  relative to beginning of stream,  EXCEPT
-     * EXCLUDES range [.eback .. .gptr],  since .gptr may update non-virtually between calls
-     * to .underflow()
-     */
-    pos_type in_uc_pos_ = 0;
-
-    /* output position, relative to beginning of stream.
      *
-     * note: We want this to update on every call to .xsputn().
-     *       Bundling into .out_zs won't work,  because .xsputn()
-     *       doesn't always invoke any .out_zs methods (instead may just does .pbump)
-     */
-    pos_type out_uc_pos_ = 0;
-
-    /* reminder:
+     * reminder:
      * 1. .eback() <= .gptr() <= .egptr()
      * 2. input buffer pointers .eback() .gptr() .egptr() are owned by basic_streambuf,
      *    and these methods are non-virtual.
      * 3. it's required that [.eback .. .egptr] represent contiguous memory
      */
 
+    /** @brief openmode for compressed stream
+
+        zstreambuf needs to know if intending to use this zstreambuf for output:
+        compressing an empty input sequence produces non-empty output (since will create a 20-byte @c gzip header)
+        Therefore:
+        - zstream("foo.gz",ios::out) should create valid @c foo.gz representing an empty sequence.
+        - sync_impl(true) needs to know whether it's responsible for achieving this; recall that it will also be called
+          on an input-only stream
+    **/
+    std::ios::openmode openmode_;
+
+    /** @brief @c true iff @ref final_sync has been called on this streambuf **/
+    bool final_sync_flag_ = false;
+    /** @brief @c true iff streambuf is in a closed state. **/
+    bool closed_flag_ = false;
+
+    /** @brief input position relative to beginning of stream,  after last call to @ref underflow
+
+        @note EXCLUDES range [@c eback .. @c gptr],  since @c gptr updates non-virtually between calls
+        to @ref underflow.
+    **/
+    pos_type in_uc_pos_ = 0;
+
+    /** @brief output position relative to beginning of stream.
+
+        Updates on every call to @ref xsputn.
+
+        @note delegating this to @ref out_zs_ will not work,  because that state only updates via @ref sync,
+        and @ref xsputn will defer that until output buffer is full.
+    **/
+    pos_type out_uc_pos_ = 0;
+
+    /** @brief stream for inflating input from @ref native_sbuf_ **/
     buffered_inflate_zstream in_zs_;
+    /** @brief stream for deflating output to @ref native_sbuf_ **/
     buffered_deflate_zstream out_zs_;
 
-    /* i/o for compressed data */
+    /** @brief i/o for compressed data **/
     std::unique_ptr<std::streambuf> native_sbuf_;
 
-    /* native file descriptor (or other os-dependent handle).
-     * (could do away with this in c++26 at cost of dynamic cast to see if .native_sbuf refers to a filebuf)
-     */
+    /** @brief native file descriptor (or with some effort, other os-dependent handle), if known.
+
+        @note Will be able to get this from @c filebuf in c++26,  at cost of a dynamic cast.
+     **/
     native_handle_type native_fd_ = -1;
 
 #  ifndef NDEBUG
+    /** @brief in debug build, remembers whether logging enabled for this instance **/
     bool debug_flag_ = false;
 #  endif
 }; /*basic_zstreambuf*/
 
+/** @brief typealias for basic_zstreambuf<char> **/
 using zstreambuf = basic_zstreambuf<char>;
 
+/** @brief provide overload for @c swap(), so that @ref basic_zstreambuf is swappable **/
 template <typename CharT, typename Traits>
 void swap(basic_zstreambuf<CharT, Traits> & lhs,
           basic_zstreambuf<CharT, Traits> & rhs)

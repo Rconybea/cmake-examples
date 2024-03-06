@@ -1,4 +1,4 @@
-// zstream.hpp
+/** @file zstream.hpp **/
 
 #pragma once
 
@@ -7,61 +7,89 @@
 #include <fstream>
 #include <list>
 
-/* note: We want to allow out-of-memory-order initialization here.
- *       1. We (presumably) must initialize .rdbuf before passing it to basic_iostream's ctor
- *       2. Since we inherit basic_iostream,  its memory will precede .rdbuf
+/* note: need to allow out-of-memory-order initialization of basic_zstream
+ * 1. basic_zstream::rdbuf needs to be constructed (so its in valid, nominal state)
+ *    before passing it to (parent) basic_iostream ctor.
+ * 2. This is out-of-memory order,  since memory for parent basic_iostream
+ *    precedes memory for basic_zstream members,
  *
- * Example 1 (compress)
- *
- *   // zstream = basic_zstream<char>,  in this file following basic_zstream decl
- *   zstream zs(64*1024, "path/to/foo.gz", ios::out);
- *
- *   zs << "some text to be compressed" << endl;
- *
- *   zs.close();
- *
- * Example 2 (uncompress)
- *
- *   zstream zs(64*1024, "path/to/foo.gz", ios::in);
- *
- *   while (!zs.eof()) {
- *     std::string x;
- *     zs >> x;
- *
- *     cout << "input: [" << x << "]" << endl;
- *   }
- *
- * Example 3 (deferred open)
- *
- *   zstream zs(0, nullptr, mode);  // or zstream zs;
- *   zs.alloc(buf_z); // create buffers
- *
- *   std::unique_ptr<std::streambuf> sbuf = ...;  // streambuf for compressed data
- *   int fd = -1;  // or file descriptor if known
- *   zs.rdbuf()->adopt_native_sbuf(std::move(streambuf), fd)
  */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreorder"
+
+/**
+   @class basic_zstream zstream/zstream.hpp
+
+   @brief iostream implementation with automatic compression/uncompression
+
+   @tparam CharT character type for stream elements
+   @tparam Traits character traits;  typically @c std::char_traits<CharT>
+
+   Example 1 - create a @c .gzip file
+   @code
+   zstream zs(0, "path/to/foo.gz", ios::out);
+
+   zs << "Some text to be compressed" << endl;
+   zs.close();
+
+   @endcode
+
+   Example 2 - read from a @c .gzip file
+   @code
+   zstream zs(0, "path/to/foo.gz", ios::in);
+
+   while (!zs.eof()) {
+       string x;
+       zs >> x;
+
+       cout << "input: [" << x << "]" << endl;
+   }
+   @endcode
+
+   Example 3 - attach existing streambuf
+   @code
+   ios::openmode mode = ...;
+
+   zstream zs(0, nullptr, mode);
+
+   unique_ptr<streambuf> sbuf = ...;  // streambuf for compressed data
+   int fd = -1;                       // or actual file descriptor,  if known
+
+   zs.rdbuf()->adopt_native_sbuf(std::move(sbuf), fd);
+   @endcode
+ **/
 template <typename CharT, typename Traits = std::char_traits<CharT>>
 class basic_zstream : public std::basic_iostream<CharT, Traits> {
 public:
-    using char_type = CharT;
+    /** @brief imported from @p Traits **/
+    ///@{
+
+    using char_type = CharT; // = Traits::char_type
     using traits_type = Traits;
     using int_type = typename Traits::int_type;
     using pos_type = typename Traits::pos_type;
     using off_type = typename Traits::off_type;
     using zstreambuf_type = basic_zstreambuf<CharT, Traits>;
+    /** @brief will import from @p Traits in c++26 **/
     using native_handle_type = int;
 
+    ///@}
+
+    /** @brief Invalid file descriptor value **/
     static constexpr native_handle_type c_empty_native_handle = -1;
+    /** @brief Default buffer size.  Buffers are used to hold both compressed and uncompressed data. **/
     static constexpr std::streamsize c_default_buffer_size = zstreambuf_type::c_default_buf_z;
 
 public:
-    /* caller must establish .rdbuf.native_sbuf before using zstream.
-     * either
-     * - .rdbuf()->adopt_native_sbuf(sbuf, native_fd)
-     * - .rdbuf()->open(fname, openmode)
-     */
+    ///@{
+
+    /**
+       @brief Create zstream in closed state.
+
+       Before using stream for i/o,  application code must invoke either
+       - attach a streambuf for compressed i/o (call @c rdbuf() method @c adopt_native_sbuf(sbuf,native_fd))
+       - call @ref open
+    **/
     basic_zstream(std::streamsize buf_z = c_default_buffer_size,
                   std::ios::openmode mode = std::ios::in)
         : rdbuf_(buf_z,
@@ -74,6 +102,14 @@ public:
             this->setstate(std::ios_base::eofbit);
         }
 
+    /**
+       @brief Create zstream using supplied streambuf for compressed data
+
+       @param buf_z  buffer size.  Implementation allocates 4 buffers of this size,  one each
+       for {input, output} x {inflated, deflated}.
+       @param native_sbuf  streambuf for compressed data.   Default is to allocate a @ref xfilebuf instance.
+       @param mode  combination of @c ios::in, @c ios::out, @c ios::binary.  Other @c openmode bits ignored.
+    **/
     basic_zstream(std::streamsize buf_z,
                   std::unique_ptr<std::streambuf> native_sbuf,
                   std::ios::openmode mode)
@@ -84,7 +120,11 @@ public:
           std::basic_iostream<CharT, Traits>(&rdbuf_)
         {}
 
-    /* convenience ctor;  apply default buffer size */
+    /**
+       @brief Create zstream using supplied streambuf for compressed data, with default buffer size
+       @param native_sbuf  streambuf for compressed data.   Default is to allocate a @ref xfilebuf instance.
+       @param mode  combination of @c ios::in, @c ios::out, @c ios::binary.  Other @c openmode bits ignored.
+    **/
     basic_zstream(std::unique_ptr<std::streambuf> native_sbuf,
                   std::ios::openmode mode)
         : basic_zstream(c_default_buffer_size,
@@ -92,11 +132,14 @@ public:
                         std::move(native_sbuf),
                         mode)
         {}
-    /* convenience ctor;  creates filebuf attached to filename and opens it.
-     *
-     * It might look like an oversight that we use xfilebuf here instead of basic_xfilebuf<CharT, Traits>.
-     * It's on purpose since refers to the compressed stream
-     */
+
+    /**
+       @brief Create zstream attached to a (compressed) file
+       @param buf_z  buffer size.  Implementation allocates 4 buffers of this size,  one each
+       for {input, output} x {inflated, deflated}.
+       @param filename  Open file with this path to hold compressed data.  File will be in gzip format.
+       @param mode  combination of @c ios::in, @c ios::out, @c ios::binary.  Other @c openmode bits ignored.
+     **/
     basic_zstream(std::streamsize buf_z,
                   char const * filename,
                   std::ios::openmode mode = std::ios::in)
@@ -132,23 +175,42 @@ public:
                   std::ios::openmode mode = std::ios::in)
         : basic_zstream(c_default_buffer_size, filename, mode) {}
 
+    ///@}
+
     ~basic_zstream() = default;
+
+    ///@{
+
+    /** @name access methods **/
 
     zstreambuf_type * rdbuf() { return &rdbuf_; }
     std::ios::openmode openmode() const { return rdbuf_.openmode(); }
     // bool eof() const;   // editor bait: inherited
+    /** @brief @c true iff this zstream is in an open state (available for i/o) **/
     bool is_open() const { return rdbuf_.is_open(); }
+    /** @brief @c true iff this zstream is in a closed state (not available for i/o) **/
     bool is_closed() const { return rdbuf_.is_closed(); }
+    /** @brief @c true iff this zstream was last opened with @c ios::binary set **/
     bool is_binary() const { return rdbuf_.is_binary(); }
+    /** @brief report native handle (file descriptor), if known **/
     native_handle_type native_handle() const { return rdbuf_.native_handle(); }
 
-    /* Allocate buffer space.  May use before reading/writing any data,  after calling ctor with 0 buf_z.
-     * Does not preserve any existing buffer contents.
-     * Not inteended to be used after beginning inflation/deflation work
-     */
+    ///@}
+
+    /** @brief  Allocate buffer space for inflation/deflation.
+
+        May use before reading/writing any data,  after calling ctor with 0 buf_z.
+        Does not preserve any existing buffer contents.
+        Not inteended to be used after beginning inflation/deflation work
+    **/
     void alloc(std::streamsize buf_z = c_default_buffer_size) { rdbuf_.alloc(buf_z); }
 
-    /* (Re)open stream,  connected to a .gz file */
+    /** @brief (Re)open zstream,  connected to a .gz file
+        @param filename   Connect zstream to file with this pathname.
+        @param mode       Openmode. If @c ios::out, provide empty file, creating or truncating as need be.
+
+        @post if successful, @c is_open() = @c true
+     **/
     void open(char const * filename,
               std::ios::openmode mode = std::ios::in)
         {
@@ -158,20 +220,31 @@ public:
             this->rdbuf_.open(filename, mode);
         }
 
-    /* read upto n-1 chars into s[0]..s[n-2] until either:
-     * 1. s[] is full (has n-1 chars)
-     * 2. check_delim_flag is true and reached character delim.
-     *    In this case behavior is equivalent to .get(s, n, delim),
-     *    except that .read_until() returns the #of characters read,
-     *    instead of *this;
-     * In any case, if read_until returns nr, then s[nr-1] is null (char_type())
-     * Return value is #of chars in s[], excluding null.
-     *
-     * We need .read_until() as building block for overload that does not require caller
-     * to supply buffer size.
-     *
-     * requires noskipws
-     */
+    /** @brief read characters up to delimiter
+
+        Read up to @c n-1 chars, into memory @c s[0]..s[n-2]
+        Stop when either:
+        - @c s[] is full (contains @c n-1 chars)
+        - @p check_delim_flag is true,  and reached character @p delim
+
+        Similar to @c .get(s,n,delim) except that:
+        - @c read_until returns the number of characters read instead of @c *this
+        - @c read_until includes writes @p delim (if encountered) to @p s
+
+        @c read_until ignores the @c noskipws flag
+
+        @note We want @c read_until() as building block for overload that does not require
+        caller to supply buffer size.
+
+        @retval number of chars written to @c s[],  excluding trailing null.
+
+        @post if @c read_until() returns @c nr with @c nr>0, then @c s[nr-1] is null (i.e. @c char_type())
+
+        @param s   write characters to this array.
+        @param n   available space in @p s.  Will not write past @c s[n-1]
+        @param check_delim_flag  @c true to stop after first occurrence of @p delim
+        @param delim  if @p check_delim_flag is @c true stop after first occurrence of @p delim in input
+     **/
     std::streamsize read_until(char_type * s,
                                std::streamsize n,
                                bool check_delim_flag,
@@ -245,13 +318,17 @@ public:
             return nr;
         }
 
-    /* if check_delim_flag is true: read up to first occurence of delim
-     * otherwise:  read up to eof.
-     *
-     * Implementation is O(n) for return value of length n
-     *
-     * Allocates pages for input in units of block_z
-     */
+    /** @brief read characters up to delimiter and package into a string
+
+        @note implementation is O(n) for return value of length n.
+
+        @param check_delim_flag If @c true read until after first occurrence of @p delim.
+        Otherwise read until end of input.
+        @param delim Stop after first occurrence of this character.  Ignored if @p check_delim_flag is @c false.
+        @param block_z  Use temporary strings of this size to assemble result.
+
+        @retval string containing characters read
+    **/
     std::string read_until(bool check_delim_flag,
                            char_type delim,
                            uint32_t block_z = 4095)
@@ -318,7 +395,7 @@ public:
             return retval;
         }
 
-    /* move-assignment */
+    /** @brief Move assignment; zstream is movable **/
     basic_zstream & operator=(basic_zstream && x) {
         /* assign any base-class state */
         std::basic_iostream<CharT, Traits>::operator=(x);
@@ -327,7 +404,7 @@ public:
         return *this;
     }
 
-    /* exchange state with x */
+    /** @brief exchange state with @p x **/
     void swap(basic_zstream & x) {
         /* swap any base-class state */
         std::basic_iostream<CharT, Traits>::swap(x);
@@ -335,12 +412,21 @@ public:
         this->rdbuf_.swap(x.rdbuf_);
     }
 
-    /* finishes writing compressed output */
+    /** @brief flush any trailing compressed output;  promise not to write any more before closing
+
+        Allow application code to read final counter values (e.g. @ref zstreambuf::n_z_in_total) before
+        @ref close resets them.  Otherwise application code can ignore this method.
+     **/
     void final_sync() {
         this->rdbuf_.final_sync();
     }
 
-    /* closes stream;  incorporates .final_sync() */
+    /** @brief close stream,  ensuring all buffered compressed data is written
+
+        @post @ref is_closed = @c true
+        @post @c eof() = @c true
+        @post @c fail() = @c false
+     **/
     void close() {
         this->rdbuf_.close();
 
@@ -349,21 +435,23 @@ public:
     }
 
 #  ifndef NDEBUG
+    /** @brief in debug build, mark streambuf to log some behavior to cerr **/
     void set_debug_flag(bool x) { rdbuf_.set_debug_flag(x); }
 #  endif
 
 private:
+    /** @brief streambuf implementation;  performs inflation (on input) and deflation (on output) **/
     basic_zstreambuf<CharT, Traits> rdbuf_;
 }; /*basic_zstream*/
 #pragma GCC diagnostic pop
 
+/** @brief typealias for @c basic_zstream<char> **/
 using zstream = basic_zstream<char>;
 
-namespace std {
-    template <typename CharT, typename Traits>
-    void swap(basic_zstream<CharT, Traits> & lhs,
-              basic_zstream<CharT, Traits> & rhs)
-    {
-        lhs.swap(rhs);
-    }
+/** @brief Provide overload of @c swap(), so that @ref basic_zstream is swappable **/
+template <typename CharT, typename Traits>
+void swap(basic_zstream<CharT, Traits> & lhs,
+          basic_zstream<CharT, Traits> & rhs)
+{
+    lhs.swap(rhs);
 }

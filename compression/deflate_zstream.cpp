@@ -14,7 +14,8 @@ deflate_zstream::~deflate_zstream() {
 }
 
 pair<span<uint8_t>, span<uint8_t>>
-deflate_zstream::deflate_chunk(bool final_flag) {
+deflate_zstream::deflate_chunk(bool final_flag)
+{
     /* U = uncompressed data
      * Z = compressed   data
      *

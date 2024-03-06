@@ -5,11 +5,11 @@ import io
 import os
 
 class ZstreamBase(io.IOBase):
-    """
-    I/O stream that operates with respect to a compressed (gzip-format) stream.
-    """
+    """I/O stream that operates with respect to a compressed (gzip-format) stream.
 
-    # pyzstream.zstream (see pyzstream.cpp)
+    Attributes:
+      _zstream  implementation (pyzstream.zstream, see pyzstream.cpp)
+    """
     _zstream = None
 
     def __init__(self,
@@ -66,6 +66,9 @@ class ZstreamBase(io.IOBase):
         return self._zstream.readinto(b)
 
     def write(self, s):
+        """
+        write string (in text mode) or object (in binary mode) to stream
+        """
         return self._zstream.write(s)
 
     # ----- inherited from IOBase -----
@@ -83,6 +86,9 @@ class ZstreamBase(io.IOBase):
         return self._zstream.is_writable()
 
     def seekable(self):
+        """
+        zstreams do not support seek
+        """
         return False
 
     @property
@@ -93,30 +99,49 @@ class ZstreamBase(io.IOBase):
         return self._zstream.is_closed()
 
     def fileno(self):
+        """
+        return file descriptor associated with zstream,  if known
+        """
         return self._zstream.native_handle()
 
     def isatty(self):
-        # interactive compressed stream not supported
+        """
+        interactive compressed stream not supported
+        """
         return False
 
     def readline(self, z = -1):
+        """
+        read up to z chars,  or until newline,  whichever comes first
+        """
         return self._zstream.readline(z)
 
     def readlines(self, hint = -1):
+        """
+        read multiple complete lines of text,  returning as a list or strings;
+        but stop reading additional lines after hint total characters.
+        """
         return self._zstream.readlines(hint)
 
     def writelines(self, l):
+        """
+        write each string in l
+        """
         for s in l:
             self.write(s)
 
     def truncate(self, z=None):
+        """
+        truncate not implemented for zstream
+        """
         raise OSError(-1, "zstream: attempted .truncate() with non-truncatable stream")
 
     def tell(self):
         """
-        Broken!  -1 once input stream reaches eof.   Want to be able to tail a file,  for example
-        """
+        Report current stream position -- assumes open for input-only or output-only
 
+        Caveat: -1 once input stream reaches eof.   Want to be able to tail a file,  for example
+        """
         # pyzstream has independent read + write positions.
         #
         # In expected case that stream was opened for input-only or output-only,
@@ -126,12 +151,26 @@ class ZstreamBase(io.IOBase):
                    self._zstream.tellp())
 
     def seek(self, offset, whence):
+        """
+        seek not implemented for zstream
+        """
         raise OSError(-1, "zstream: attempted .seek() with non-seekable stream")
 
     def close(self):
+        """
+        send zstream to closed state,  flush any remaining output.
+        """
         self._zstream.close()
 
     def flush(self):
+        """
+        flush remaining output.
+
+        NOTE: excludes output held internally by zlib for which compressed representation isn't yet determined
+        (because it depends on further uncompressed data)
+
+        Stream more output,  or flush this data using close()
+        """
         self._zstream.sync()
 
 
@@ -176,13 +215,17 @@ class TextZstream(ZstreamBase, io.TextIOBase):
 
     @property
     def encoding(self):
+        """
+        assuming utf-8 for encoding
+        """
         return "utf-8"
 
-    # errors property of regular open isn't supported here.
-    # if this is important,  suggest using TextIOWrapper to textify a BufferedZstream
-    #
     @property
     def errors(self):
+        """
+        errors property of regular open isn't supported here.
+        if this is important,  suggest using TextIOWrapper to textify a BufferedZstream
+        """
         return "ignore"
 
     # .newlines : not supported
