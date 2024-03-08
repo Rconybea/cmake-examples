@@ -38,7 +38,7 @@ class ZstreamBase(io.IOBase):
 
         super(ZstreamBase, self).__init__()
 
-    def read(self, z = -1):
+    def read(self, z : int = -1):
         """
         Broken!
         1. zstream.read(z) will set failbit if less than z bytes available
