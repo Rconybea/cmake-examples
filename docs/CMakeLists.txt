@@ -1,12 +1,14 @@
 set(DOXYGEN_INDEX_FILE ${CMAKE_CURRENT_BINARY_DIR}/html/index.html)
 set(DOXYGEN_CONFIG_FILE ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
 
+set(DOX_DEPS ${PROJECT_SOURCE_DIR}/mainpage.dox)
+set(DOX_INPUT_DIR ${PROJECT_SOURCE_DIR})
+set(DOX_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/dox)
+
 configure_file(
     Doxyfile.in ${DOXYGEN_CONFIG_FILE}
     FILE_PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
     @ONLY)
-
-set(DOX_DEPS ${PROJECT_SOURCE_DIR}/mainpage.dox)
 
 # depending on {library, utest} targets here:
 # - as means to getting (indirect) dependency on .hpp files
@@ -15,6 +17,7 @@ set(DOX_DEPS ${PROJECT_SOURCE_DIR}/mainpage.dox)
 set(ALL_LIBRARY_TARGETS compression zstream pyzstream)
 set(ALL_UTEST_TARGETS utest.compression utest.zstream)
 
+file(MAKE_DIRECTORY ${DOX_OUTPUT_DIR})
 add_custom_command(
     OUTPUT ${DOXYGEN_INDEX_FILE}
     DEPENDS ${DOX_DEPS} ${ALL_LIBRARY_TARGETS} ${ALL_UTEST_TARGETS}
