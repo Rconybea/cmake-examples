@@ -203,3 +203,43 @@ class TextZstream(ZstreamBase, io.TextIOBase):
     # .write : inherited from ZstreamBase
 
 # ..class Zstream
+
+def zopen(filename : str | bytes | os.PathLike,
+          mode : str = 'r',
+          buffering : int = 64*1024,
+          encoding = None,
+          errors = None,
+          newline = None):
+    """Drop-in (with caveats) replacement for built-in open(), that works with a compressed file
+
+    Caveats
+      integer file descriptors for filename are not supported
+      Accordingly the closefd and opener arguments to built-in open() are not provided.
+
+    Args:
+      filename    path-like-object of file to be opened.
+                  integer file descriptors not supported.
+      mode (str)  optional string specifying file open mode.
+                  'r' (read), 'w' (write), 'b' (binary), 't' (text).
+                  'x', 'a' not supported (as of mar 2024).
+                  '+' is permitted but not usable absent some basic seek support.
+                  For example, "rb" to open for reading in binary mode.  Default is "r".
+      buffering   buffer size.  Floored at 1 byte.  Default 64k
+      encoding    string encoding in text mode
+      errors      optional string specifying how encoding and decoding errors should be handled.
+                  See built-in open();  ignored in binary mode.
+      newline     determines handling of newline characters in text mode.  See built-in open();
+    """
+    bufsize = max(1, buffering)
+
+    zs = BufferedZstream(filename, mode, bufsize)
+
+    if 'b' in mode:
+        return zs
+    else:
+        return io.TextIOWrapper(zs,
+                                encoding,
+                                errors,
+                                newline,
+                                line_buffering=False,
+                                write_through=False)
