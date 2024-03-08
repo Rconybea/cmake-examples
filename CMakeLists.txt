@@ -154,7 +154,13 @@ message("-- Python_VERSION=${Python_VERSION}")
 #message("Python_VERSION_MINOR=${Python_VERSION_MINOR}")
 set(PYTHON_LIBRARY_PREFIX ${Python_VERSION_MAJOR}.${Python_VERSION_MINOR})
 
+# look for sphinx-build executable
+find_program(SPHINX_EXECUTABLE NAMES sphinx-build REQUIRED)
+message("-- SPHINX_EXECUTABLE=${SPHINX_EXECUTABLE}")
+
+# look for doxygen executable
 find_program(DOXYGEN_EXECUTABLE NAMES doxygen REQUIRED)
+message("-- DOXYGEN_EXECUTABLE=${DOXYGEN_EXECUTABLE}")
 
 find_package(Catch2 CONFIG REQUIRED)
 find_package(boost_program_options CONFIG REQUIRED)
