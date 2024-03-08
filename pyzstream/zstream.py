@@ -48,7 +48,10 @@ class ZstreamBase(io.IOBase):
 
     # def readinto(b):   # TODO
 
-    def write(self, s):
+    def write(self, s : str):
+        """
+        write string (in text mode) or object (in binary mode) to stream
+        """
         return self._zstream.write(s)
 
     # ----- inherited from IOBase -----
@@ -110,7 +113,7 @@ class BufferedZstream(ZstreamBase, io.BufferedIOBase):
     def __init__(self,
                  filename : str | bytes | os.PathLike,
                  mode : str = 'rb',
-                 bufsize = 64*1024):
+                 bufsize : int = 64*1024):
         # super() invokes ZstreamBase ctor first
         super(BufferedZstream, self).__init__(filename,
                                               mode + 'b',
@@ -132,7 +135,7 @@ class TextZstream(ZstreamBase, io.TextIOBase):
     def __init__(self,
                  filename : str | bytes | os.PathLike,
                  mode : str = 'r',
-                 bufsize = 64*1024):
+                 bufsize : int = 64*1024):
         # init ZstreamBase first
         super(TextZstream, self).__init__(filename, mode, bufsize)
 
