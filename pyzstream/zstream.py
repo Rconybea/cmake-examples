@@ -50,7 +50,7 @@ class ZstreamBase(io.IOBase):
         """
         return self._zstream.eof()
 
-    def read(self, z = -1):
+    def read(self, z : int = -1):
         """
         Broken!
         1. zstream.read(z) will set failbit if less than z bytes available
@@ -65,7 +65,10 @@ class ZstreamBase(io.IOBase):
         """
         return self._zstream.readinto(b)
 
-    def write(self, s):
+    def write(self, s : str):
+        """
+        write string (in text mode) or object (in binary mode) to stream
+        """
         return self._zstream.write(s)
 
     # ----- inherited from IOBase -----
@@ -148,7 +151,7 @@ class BufferedZstream(ZstreamBase, io.BufferedIOBase):
     def __init__(self,
                  filename : str | bytes | os.PathLike,
                  mode : str = 'rb',
-                 bufsize = 64*1024):
+                 bufsize : int = 64*1024):
         # super() invokes ZstreamBase ctor first
         super(BufferedZstream, self).__init__(filename,
                                               mode + 'b',
@@ -170,7 +173,7 @@ class TextZstream(ZstreamBase, io.TextIOBase):
     def __init__(self,
                  filename : str | bytes | os.PathLike,
                  mode : str = 'r',
-                 bufsize = 64*1024):
+                 bufsize : int = 64*1024):
         # init ZstreamBase first
         super(TextZstream, self).__init__(filename, mode, bufsize)
 
@@ -203,3 +206,43 @@ class TextZstream(ZstreamBase, io.TextIOBase):
     # .write : inherited from ZstreamBase
 
 # ..class Zstream
+
+def zopen(filename : str | bytes | os.PathLike,
+          mode : str = 'r',
+          buffering : int = 64*1024,
+          encoding = None,
+          errors = None,
+          newline = None):
+    """Drop-in (with caveats) replacement for built-in open(), that works with a compressed file
+
+    Caveats
+      integer file descriptors for filename are not supported
+      Accordingly the closefd and opener arguments to built-in open() are not provided.
+
+    Args:
+      filename    path-like-object of file to be opened.
+                  integer file descriptors not supported.
+      mode (str)  optional string specifying file open mode.
+                  'r' (read), 'w' (write), 'b' (binary), 't' (text).
+                  'x', 'a' not supported (as of mar 2024).
+                  '+' is permitted but not usable absent some basic seek support.
+                  For example, "rb" to open for reading in binary mode.  Default is "r".
+      buffering   buffer size.  Floored at 1 byte.  Default 64k
+      encoding    string encoding in text mode
+      errors      optional string specifying how encoding and decoding errors should be handled.
+                  See built-in open();  ignored in binary mode.
+      newline     determines handling of newline characters in text mode.  See built-in open();
+    """
+    bufsize = max(1, buffering)
+
+    zs = BufferedZstream(filename, mode, bufsize)
+
+    if 'b' in mode:
+        return zs
+    else:
+        return io.TextIOWrapper(zs,
+                                encoding,
+                                errors,
+                                newline,
+                                line_buffering=False,
+                                write_through=False)
