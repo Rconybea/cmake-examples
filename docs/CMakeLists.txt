@@ -37,6 +37,21 @@ add_custom_target(
     DEPENDS ${DOXYGEN_INDEX_FILE}
 )
 
+# root of sphinx doc tree
+set(SPHINX_SOURCE ${CMAKE_CURRENT_SOURCE_DIR})
+set(SPHINX_BUILD ${CMAKE_CURRENT_BINARY_DIR}/sphinx)
+
+# TODO: add_custom_command as afor doxygen;  output CMAKE_CURRENT_BINARY_DIR/sphinx/index.html
+
+# make sphinx --> generate sphinx documentation
+add_custom_target(
+    sphinx
+    ALL
+    COMMAND ${SPHINX_EXECUTABLE} -b html
+    ${SPHINX_SOURCE} ${SPHINX_BUILD}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Generating docs (sphinx)")
+
 # - html docs generated in build/docs/html
 # - copy the doc tree to share/doc/cmake-examples/html
 #
