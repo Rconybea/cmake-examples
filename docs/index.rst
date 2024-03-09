@@ -11,6 +11,9 @@ cmake-examples documentation
    :caption: Contents:
 
    self
+   pyzstreamlib/index
+   zstreamlib/index
+   compressionlib/index
 
 Indices and tables
 ==================
