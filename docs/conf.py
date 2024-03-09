@@ -13,7 +13,12 @@ author = 'Roland Conybeare'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
+#extensions = []
+extensions = [ "breathe" ]
+
+# note: breathe requires doxygen xml output -> must have GENERATE_XML = YES in Doxyfile.in
+#       match project name in Doxyfile.in
+breathe_default_project = "cmkx"
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
